@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <h2></h2>
     <title>University Schedule Creator</title>
     <link rel="stylesheet" href="styles/main.css">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -11,6 +13,41 @@
             margin: 0;
             padding: 0;
             background-color: #f5f5f5;
+            font-family: Arial, sans-serif;
+        }
+        
+        .main-container {
+            display: flex;
+            gap: 20px;
+            padding: 2rem;
+            max-height: 100vh;
+            overflow: hidden;
+        }
+        
+        .left-column {
+            flex: 0.7;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-height: calc(100vh - 4rem);
+            overflow-y: auto;
+        }
+        
+        .right-column {
+            flex: 1.3;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-height: calc(100vh - 4rem);
+            overflow-y: auto;
+        }
+        
+        .page-title {
+            text-align: center;
+            margin: 0 0 2rem 0;
+            font-size: 28px;
+            color: #333;
+            font-weight: bold;
         }
         
         .search-container {
@@ -18,7 +55,14 @@
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
+            height: fit-content;
+        }
+        
+        .search-container h2 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 20px;
         }
         
         .search-input {
@@ -63,6 +107,31 @@
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            height: fit-content;
+        }
+        
+        .selected-lectures-container h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 18px;
+        }
+        
+        .combinations-container {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .combinations-container h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 18px;
         }
         
         .selected-lecture-tag {
@@ -104,12 +173,31 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         
+        .timetable-section {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .timetable-section h2 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 22px;
+            text-align: center;
+        }
+        
         .timetable-container {
             background: white;
             border-radius: 12px;
             overflow: hidden;
             box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            margin: 20px 0;
+            margin: 0;
+            flex: 1;
         }
         
         .timetable-grid {
@@ -150,6 +238,7 @@
             border: 1px solid #e2e8f0;
             transition: all 0.2s ease;
             min-height: 58px;
+            cursor: pointer;
         }
         
         .timetable-cell:hover {
@@ -157,6 +246,27 @@
             transform: scale(1.02);
             z-index: 1;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .timetable-cell.locked {
+            background: #fed7d7 !important;
+            border: 2px solid #e53e3e !important;
+            cursor: pointer;
+        }
+        
+        .timetable-cell.locked:hover {
+            background: #feb2b2 !important;
+            transform: scale(1.02);
+        }
+        
+        .locked-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #e53e3e;
+            pointer-events: none;
         }
         
         .lecture-block {
@@ -231,6 +341,18 @@
         }
         
         @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+                max-height: none;
+                overflow: visible;
+            }
+            
+            .left-column,
+            .right-column {
+                max-height: none;
+                overflow-y: visible;
+            }
+            
             .timetable-grid {
                 grid-template-columns: 80px repeat(5, 1fr);
                 grid-template-rows: 50px repeat(11, 50px);
@@ -255,58 +377,81 @@
 </head>
 <body>
         <div id="root"></div>
-        <main style="padding: 2rem; font-family: Arial, sans-serif;">
-            <h1 style="text-align:center;">University Schedule Creator</h1>
-            
-            <!-- Search and Lecture Selection Section -->
-            <div class="search-container">
-                <h2>Search and Select Lectures</h2>
-                <div style="margin-bottom: 1rem;">
-                    <input type="text" id="lectureSearch" placeholder="Search for lectures, codes, or lecturers..." 
-                           class="search-input">
+        <h1 class="page-title">University Schedule Creator</h1>
+        
+        <div class="main-container">
+            <!-- Left Column -->
+            <div class="left-column">
+                <!-- Search and Lecture Selection Section -->
+                <div class="search-container">
+                    <h2>Search and Select Lectures</h2>
+                    <div style="margin-bottom: 1rem;">
+                        <input type="text" id="lectureSearch" placeholder="Search for lectures, codes, or lecturers..." 
+                               class="search-input">
+                    </div>
+                    
+                    <div id="lectureList" class="lecture-list" style="padding: 10px;">
+                        <div id="loadingMessage" style="text-align: center; color: #666;">Loading lectures...</div>
+                        <div id="lectureResults"></div>
+                    </div>
                 </div>
                 
-                <div id="lectureList" class="lecture-list" style="padding: 10px;">
-                    <div id="loadingMessage" style="text-align: center; color: #666;">Loading lectures...</div>
-                    <div id="lectureResults"></div>
-                </div>
-            </div>
-            
-            <div class="selected-lectures-container">
-                <h3>Selected Lectures:</h3>
-                <div id="selectedLectures" style="min-height: 50px;">
-                    <p style="color: #666; margin: 0;">No lectures selected yet.</p>
-                </div>
-            </div>
-            
-            <div id="timetableCombinations" class="selected-lectures-container" style="margin-top: 20px; display: none;">
-                <h3>Possible Timetable Combinations:</h3>
-                <div id="combinationsContainer" style="max-height: 400px; overflow-y: auto;">
-                </div>
-            </div>
-            
-            <h2 style="text-align:center;">Weekly Timetable</h2>
-            
-            <div id="timetableControls" style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: none;">
-                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                    <div>
-                        <label style="font-weight: bold; margin-right: 10px;">Timetable Combination:</label>
-                        <select id="combinationSelector" onchange="displayCombinationInTimetable()" style="padding: 8px; border: 2px solid #e0e0e0; border-radius: 5px; background: white;">
-                            <option value="">Select a combination...</option>
-                        </select>
-                    </div>
-                    <div style="color: #666; font-size: 14px;">
-                        <span id="combinationInfo"></span>
+                <!-- Possible Timetable Combinations -->
+                <div id="timetableCombinations" class="combinations-container" style="display: none;">
+                    <h3>Possible Timetable Combinations:</h3>
+                    <div id="combinationsContainer" style="flex: 1; overflow-y: auto;">
                     </div>
                 </div>
             </div>
             
-            <div class="timetable-container">
-                <div class="timetable-grid" id="timetableGrid">
-                    <!-- Timetable will be generated dynamically -->
+            <!-- Right Column -->
+            <div class="right-column">
+                <!-- Selected Lectures -->
+                <div class="selected-lectures-container">
+                    <h3>Selected Lectures:</h3>
+                    <div id="selectedLectures" style="min-height: 50px;">
+                        <p style="color: #666; margin: 0;">No lectures selected yet.</p>
+                    </div>
+                </div>
+                
+                <!-- Locked Time Slots -->
+                <div id="lockedSlotsContainer" class="selected-lectures-container" style="display: none;">
+                    <h3>Locked Time Slots:</h3>
+                    <div id="lockedSlots" style="min-height: 30px;">
+                        <p style="color: #666; margin: 0; font-size: 14px;">Click on empty timetable cells to lock them.</p>
+                    </div>
+                    <button onclick="clearAllLockedSlots()" style="margin-top: 10px; padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                        Clear All Locked Slots
+                    </button>
+                </div>
+                
+                <!-- Timetable Controls -->
+                <div id="timetableControls" style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: none;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <label style="font-weight: bold; margin-right: 10px;">Timetable Combination:</label>
+                            <select id="combinationSelector" onchange="displayCombinationInTimetable()" style="padding: 8px; border: 2px solid #e0e0e0; border-radius: 5px; background: white;">
+                                <option value="">Select a combination...</option>
+                            </select>
+                        </div>
+                        <div style="color: #666; font-size: 14px;">
+                            <span id="combinationInfo"></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Weekly Timetable -->
+                <div class="timetable-section">
+                    <h2>Weekly Timetable</h2>
+                    
+                    <div class="timetable-container">
+                        <div class="timetable-grid" id="timetableGrid">
+                            <!-- Timetable will be generated dynamically -->
+                        </div>
+                    </div>
                 </div>
             </div>
-        </main>
+        </div>
         
         <script>
         // Lecture data and functionality
@@ -314,6 +459,7 @@
         let selectedLectures = [];
         let validCombinations = [];
         let currentCombinationIndex = 0;
+        let lockedTimeSlots = new Set(); // Format: "Day_Hour" (e.g., "Monday_10")
         
         // Simple time structure - each hour from 9 to 19
         const timeHours = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
@@ -467,14 +613,14 @@
                 // Time slot
                 gridHTML += `<div class="time-slot">${timeLabel}</div>`;
                 
-                // Day cells
+                // Day cells with click handlers
                 days.forEach(day => {
-                    gridHTML += `<div class="timetable-cell" id="cell_${day}_${hour}"></div>`;
+                    gridHTML += `<div class="timetable-cell" id="cell_${day}_${hour}" onclick="toggleTimeSlotLock('${day}', ${hour})"></div>`;
                 });
             });
             
             timetableGrid.innerHTML = gridHTML;
-            console.log('Modern timetable initialized with CSS Grid');
+            console.log('Modern timetable initialized with CSS Grid and click handlers');
         }
         
         // Load lectures from API or use sample data
@@ -501,11 +647,11 @@
         function setupSearchFunctionality() {
             const searchInput = document.getElementById('lectureSearch');
             searchInput.addEventListener('input', function() {
-                const searchTerm = this.value.toLowerCase();
+                const searchTerm = this.value.toLowerCase().normalize('NFD');
                 const filteredLectures = allLectures.filter(lecture => 
-                    lecture.Code.toLowerCase().includes(searchTerm) ||
-                    lecture.Name.toLowerCase().includes(searchTerm) ||
-                    lecture.Lecturer.toLowerCase().includes(searchTerm)
+                    lecture.Code.toLowerCase().normalize('NFD').includes(searchTerm) ||
+                    lecture.Name.toLowerCase().normalize('NFD').includes(searchTerm) ||
+                    (lecture.Lecturer && lecture.Lecturer.toLowerCase().normalize('NFD').includes(searchTerm))
                 );
                 displayLectures(filteredLectures);
             });
@@ -744,19 +890,110 @@
             });
         }
         
+        // Toggle time slot lock
+        function toggleTimeSlotLock(day, hour) {
+            const cellId = `cell_${day}_${hour}`;
+            const cell = document.getElementById(cellId);
+            const slotKey = `${day}_${hour}`;
+            
+            if (!cell) return;
+            
+            // Don't allow locking if cell has a lecture
+            if (cell.innerHTML.trim() !== '' && !cell.classList.contains('locked')) {
+                return;
+            }
+            
+            if (lockedTimeSlots.has(slotKey)) {
+                // Unlock the slot
+                lockedTimeSlots.delete(slotKey);
+                cell.classList.remove('locked');
+                cell.innerHTML = '';
+            } else {
+                // Lock the slot
+                lockedTimeSlots.add(slotKey);
+                cell.classList.add('locked');
+                cell.innerHTML = '<div class="locked-indicator">🔒</div>';
+            }
+            
+            updateLockedSlotsDisplay();
+            
+            // Regenerate combinations if there are selected lectures
+            if (selectedLectures.length > 0) {
+                generateTimetableCombinations();
+            }
+        }
+        
+        // Update locked slots display
+        function updateLockedSlotsDisplay() {
+            const container = document.getElementById('lockedSlotsContainer');
+            const slotsDiv = document.getElementById('lockedSlots');
+            
+            if (lockedTimeSlots.size === 0) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            container.style.display = 'block';
+            
+            const lockedSlotsList = Array.from(lockedTimeSlots).map(slotKey => {
+                const [day, hour] = slotKey.split('_');
+                const nextHour = parseInt(hour) + 1;
+                return `<span style="display: inline-block; margin: 2px; padding: 4px 8px; background: #fed7d7; color: #e53e3e; border-radius: 12px; font-size: 12px; border: 1px solid #e53e3e;">
+                    ${day} ${hour}:00-${nextHour}:00 🔒
+                </span>`;
+            }).join('');
+            
+            slotsDiv.innerHTML = lockedSlotsList;
+        }
+        
+        // Clear all locked slots
+        function clearAllLockedSlots() {
+            lockedTimeSlots.clear();
+            
+            // Remove visual indicators
+            timeHours.forEach(hour => {
+                days.forEach(day => {
+                    const cellId = `cell_${day}_${hour}`;
+                    const cell = document.getElementById(cellId);
+                    if (cell && cell.classList.contains('locked')) {
+                        cell.classList.remove('locked');
+                        if (cell.innerHTML.includes('locked-indicator')) {
+                            cell.innerHTML = '';
+                        }
+                    }
+                });
+            });
+            
+            updateLockedSlotsDisplay();
+            
+            // Regenerate combinations if there are selected lectures
+            if (selectedLectures.length > 0) {
+                generateTimetableCombinations();
+            }
+        }
+        
         // Clear the timetable - CSS Grid version
         function clearTimetable() {
             timeHours.forEach(hour => {
                 days.forEach(day => {
                     const cellId = `cell_${day}_${hour}`;
                     const cell = document.getElementById(cellId);
+                    const slotKey = `${day}_${hour}`;
+                    
                     if (cell) {
-                        cell.innerHTML = '';
-                        cell.className = 'timetable-cell';
+                        if (lockedTimeSlots.has(slotKey)) {
+                            // Keep locked slots
+                            cell.className = 'timetable-cell locked';
+                            cell.innerHTML = '<div class="locked-indicator">🔒</div>';
+                        } else {
+                            // Clear unlocked slots
+                            cell.innerHTML = '';
+                            cell.className = 'timetable-cell';
+                        }
                     }
                 });
             });
-            console.log('Modern timetable cleared');
+            console.log('Modern timetable cleared, locked slots preserved');
         }
         
         // Place a lecture in the correct timetable cells - modern design
@@ -831,7 +1068,7 @@
             return result;
         }
         
-        // Check if a combination has time conflicts - updated for multiple time slots
+        // Check if a combination has time conflicts - updated for multiple time slots and locked slots
         function hasTimeConflict(combination) {
             // Get all time slots for all lectures in the combination
             const allTimeSlots = [];
@@ -851,6 +1088,17 @@
                     });
                 });
             });
+            
+            // Check for conflicts with locked time slots
+            for (const timeSlot of allTimeSlots) {
+                for (let hour = timeSlot.StartHour; hour < timeSlot.EndHour; hour++) {
+                    const slotKey = `${timeSlot.Day}_${hour}`;
+                    if (lockedTimeSlots.has(slotKey)) {
+                        console.log('Conflict with locked slot:', slotKey, 'for lecture:', timeSlot.Code);
+                        return true;
+                    }
+                }
+            }
             
             // Check for conflicts between all time slots
             for (let i = 0; i < allTimeSlots.length; i++) {
