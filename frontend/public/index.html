@@ -103,6 +103,154 @@
             overflow: hidden;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
+        
+        .timetable-container {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            margin: 20px 0;
+        }
+        
+        .timetable-grid {
+            display: grid;
+            grid-template-columns: 120px repeat(5, 1fr);
+            grid-template-rows: 60px repeat(11, 60px);
+            gap: 1px;
+            background-color: #e2e8f0;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        .timetable-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+            text-align: center;
+            padding: 10px;
+        }
+        
+        .time-slot {
+            background: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 14px;
+            border-right: 2px solid #e2e8f0;
+        }
+        
+        .timetable-cell {
+            background: #ffffff;
+            position: relative;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s ease;
+            min-height: 58px;
+        }
+        
+        .timetable-cell:hover {
+            background: #f7fafc;
+            transform: scale(1.02);
+            z-index: 1;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .lecture-block {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            right: 2px;
+            bottom: 2px;
+            border-radius: 8px;
+            padding: 8px;
+            color: white;
+            font-size: 11px;
+            line-height: 1.2;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            transition: all 0.2s ease;
+        }
+        
+        .lecture-block:hover {
+            transform: scale(1.05);
+            z-index: 2;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        
+        .lecture-code {
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 2px;
+        }
+        
+        .lecture-section {
+            font-size: 10px;
+            opacity: 0.9;
+            margin-bottom: 2px;
+        }
+        
+        .lecture-lecturer {
+            font-size: 9px;
+            opacity: 0.8;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .lecture-continuation {
+            background: linear-gradient(135deg, #4299e1, #3182ce) !important;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .lecture-colors {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+        
+        .lecture-colors-alt {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+        }
+        
+        .lecture-colors-alt2 {
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+        }
+        
+        .lecture-colors-alt3 {
+            background: linear-gradient(135deg, #43e97b, #38f9d7);
+        }
+        
+        .lecture-colors-alt4 {
+            background: linear-gradient(135deg, #fa709a, #fee140);
+        }
+        
+        @media (max-width: 768px) {
+            .timetable-grid {
+                grid-template-columns: 80px repeat(5, 1fr);
+                grid-template-rows: 50px repeat(11, 50px);
+                font-size: 12px;
+            }
+            
+            .timetable-header {
+                font-size: 14px;
+                padding: 8px;
+            }
+            
+            .time-slot {
+                font-size: 12px;
+            }
+            
+            .lecture-block {
+                padding: 4px;
+                font-size: 10px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -153,21 +301,11 @@
                 </div>
             </div>
             
-            <table border="1" cellspacing="0" cellpadding="8" class="timetable" style="width:100%; border-collapse:collapse; text-align:center;" id="weeklyTimetable">
-                <thead style="background:#f0f0f0;">
-                    <tr>
-                        <th>Time</th>
-                        <th>Monday</th>
-                        <th>Tuesday</th>
-                        <th>Wednesday</th>
-                        <th>Thursday</th>
-                        <th>Friday</th>
-                    </tr>
-                </thead>
-                <tbody id="timetableBody">
-                    <!-- Timetable rows will be generated dynamically -->
-                </tbody>
-            </table>
+            <div class="timetable-container">
+                <div class="timetable-grid" id="timetableGrid">
+                    <!-- Timetable will be generated dynamically -->
+                </div>
+            </div>
         </main>
         
         <script>
@@ -180,6 +318,13 @@
         // Simple time structure - each hour from 9 to 19
         const timeHours = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
         const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+        const dayColumnMap = {
+            "Monday": 1,
+            "Tuesday": 2, 
+            "Wednesday": 3,
+            "Thursday": 4,
+            "Friday": 5
+        };
         
         // Process lectures to parse time slots from Excel format
         function processLectures(rawLectures) {
@@ -301,24 +446,35 @@
         
         // Initialize empty timetable
         function initializeTimetable() {
-            const tbody = document.getElementById('timetableBody');
+            const timetableGrid = document.getElementById('timetableGrid');
             
-            // Create rows for each hour
-            tbody.innerHTML = timeHours.map(hour => {
+            // Create CSS Grid layout
+            let gridHTML = '';
+            
+            // Headers
+            gridHTML += '<div class="timetable-header">Time</div>';
+            gridHTML += '<div class="timetable-header">Monday</div>';
+            gridHTML += '<div class="timetable-header">Tuesday</div>';
+            gridHTML += '<div class="timetable-header">Wednesday</div>';
+            gridHTML += '<div class="timetable-header">Thursday</div>';
+            gridHTML += '<div class="timetable-header">Friday</div>';
+            
+            // Time slots and cells
+            timeHours.forEach(hour => {
                 const nextHour = hour + 1;
                 const timeLabel = `${hour.toString().padStart(2, '0')}:00 - ${nextHour.toString().padStart(2, '0')}:00`;
                 
-                return `
-                    <tr>
-                        <td style="background: #f8f9fa; font-weight: bold; width: 120px;">${timeLabel}</td>
-                        ${days.map(day => 
-                            `<td id="cell_${day}_${hour}" style="height: 50px; width: 150px; border: 1px solid #ddd; position: relative; vertical-align: top;"></td>`
-                        ).join('')}
-                    </tr>
-                `;
-            }).join('');
+                // Time slot
+                gridHTML += `<div class="time-slot">${timeLabel}</div>`;
+                
+                // Day cells
+                days.forEach(day => {
+                    gridHTML += `<div class="timetable-cell" id="cell_${day}_${hour}"></div>`;
+                });
+            });
             
-            console.log('Timetable initialized with cells for hours:', timeHours);
+            timetableGrid.innerHTML = gridHTML;
+            console.log('Modern timetable initialized with CSS Grid');
         }
         
         // Load lectures from API or use sample data
@@ -588,7 +744,7 @@
             });
         }
         
-        // Clear the timetable - simple version
+        // Clear the timetable - CSS Grid version
         function clearTimetable() {
             timeHours.forEach(hour => {
                 days.forEach(day => {
@@ -596,15 +752,14 @@
                     const cell = document.getElementById(cellId);
                     if (cell) {
                         cell.innerHTML = '';
-                        cell.style.background = '';
-                        cell.style.border = '1px solid #ddd';
+                        cell.className = 'timetable-cell';
                     }
                 });
             });
-            console.log('Timetable cleared');
+            console.log('Modern timetable cleared');
         }
         
-        // Place a lecture in the correct timetable cells - completely rewritten
+        // Place a lecture in the correct timetable cells - modern design
         function placeLectureInTimetable(lecture) {
             console.log('=== Placing lecture ===');
             console.log('Lecture object:', lecture);
@@ -618,66 +773,39 @@
             const startHour = lecture.StartHour;
             const endHour = lecture.EndHour;
             
+            // Get a color scheme for this lecture
+            const colorClasses = ['lecture-colors', 'lecture-colors-alt', 'lecture-colors-alt2', 'lecture-colors-alt3', 'lecture-colors-alt4'];
+            const colorIndex = Math.abs(lecture.Code.charCodeAt(0) + lecture.Code.charCodeAt(1)) % colorClasses.length;
+            const colorClass = colorClasses[colorIndex];
+            
             console.log(`Placing ${lecture.Code} on ${day} from ${startHour}:00 to ${endHour}:00`);
             
             // Place lecture in each hour it occupies
             for (let hour = startHour; hour < endHour; hour++) {
                 const cellId = `cell_${day}_${hour}`;
-                console.log(`Looking for cell: ${cellId}`);
-                
                 const cell = document.getElementById(cellId);
+                
                 if (cell) {
-                    console.log(`Found cell ${cellId}, placing lecture`);
-                    
-                    // Create lecture block
                     const isFirstHour = (hour === startHour);
                     
                     if (isFirstHour) {
                         // First hour - show full information
                         cell.innerHTML = `
-                            <div style="
-                                background: linear-gradient(135deg, #007bff, #0056b3); 
-                                color: white; 
-                                padding: 5px; 
-                                border-radius: 4px; 
-                                font-size: 11px; 
-                                line-height: 1.3; 
-                                height: calc(100% - 10px);
-                                display: flex;
-                                flex-direction: column;
-                                justify-content: center;
-                            ">
-                                <div style="font-weight: bold; font-size: 12px;">${lecture.Code}</div>
-                                <div style="font-size: 10px;">Sec ${lecture.Section}</div>
-                                <div style="font-size: 9px; opacity: 0.9;">${lecture.Lecturer}</div>
+                            <div class="lecture-block ${colorClass}">
+                                <div class="lecture-code">${lecture.Code}</div>
+                                <div class="lecture-section">Sec ${lecture.Section}</div>
+                                <div class="lecture-lecturer">${lecture.Lecturer || 'TBA'}</div>
                             </div>
                         `;
                     } else {
                         // Continuation hours - show abbreviated info
                         cell.innerHTML = `
-                            <div style="
-                                background: linear-gradient(135deg, #0056b3, #003d82); 
-                                color: white; 
-                                padding: 5px; 
-                                border-radius: 4px; 
-                                font-size: 10px; 
-                                height: calc(100% - 10px);
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                            ">
-                                <div style="text-align: center;">
-                                    <div style="font-weight: bold;">${lecture.Code}</div>
-                                    <div style="font-size: 8px; opacity: 0.8;">(cont.)</div>
-                                </div>
+                            <div class="lecture-block lecture-continuation">
+                                <div class="lecture-code">${lecture.Code}</div>
+                                <div style="font-size: 8px; opacity: 0.8;">(cont.)</div>
                             </div>
                         `;
                     }
-                    
-                    // Highlight the cell
-                    cell.style.background = '#e3f2fd';
-                    cell.style.border = '2px solid #007bff';
-                    
                 } else {
                     console.error(`Cell not found: ${cellId}`);
                 }
