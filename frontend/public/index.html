@@ -360,6 +360,73 @@
             background: linear-gradient(135deg, #fa709a, #fee140);
         }
         
+        .conflict-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(220, 53, 69, 0.95);
+            color: white;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: bold;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(220, 53, 69, 0.4);
+            z-index: 15;
+            border: 2px solid #dc3545;
+        }
+        
+        .lecture-block.conflicted {
+            width: 45% !important;
+            z-index: 12;
+            border: 2px solid #dc3545;
+            box-shadow: 0 2px 8px rgba(220, 53, 69, 0.4);
+        }
+        
+        .lecture-block.conflicted:first-child {
+            left: 2px;
+        }
+        
+        .lecture-block.conflicted:last-child {
+            right: 2px;
+            left: auto;
+        }
+        
+                .conflict-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(220, 53, 69, 0.95);
+            color: white;
+            padding: 4px 6px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: bold;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(220, 53, 69, 0.4);
+            z-index: 20;
+            border: 2px solid #dc3545;
+            backdrop-filter: blur(2px);
+        }
+        
+        .lecture-block.conflicted {
+            width: 48% !important;
+            z-index: 12;
+            border: 2px solid #dc3545 !important;
+            box-shadow: 0 2px 8px rgba(220, 53, 69, 0.4) !important;
+        }
+        
+        .lecture-block.conflicted.first {
+            left: 1% !important;
+        }
+        
+        .lecture-block.conflicted.second {
+            right: 1% !important;
+            left: auto !important;
+        }
+        
         @media (max-width: 768px) {
             .main-container {
                 flex-direction: column;
@@ -504,6 +571,11 @@
         let lecturerPreferences = {}; // Object to store preferred lecturers for each lecture code
         let sectionPreferences = {}; // Object to store preferred sections for each lecture code
         let lectureColors = {}; // Object to store assigned colors for each lecture code
+        
+        // Alternative course management
+        let alternativeCourseGroups = {}; // Object to store alternative course groups: {groupId: [courseCode1, courseCode2]}
+        let courseToAlternativeGroup = {}; // Object to map course codes to their alternative group ID
+        let alternativeGroupCounter = 0; // Counter to generate unique group IDs
         
         // Simple time structure - each hour from 9 to 19
         const timeHours = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
@@ -1065,6 +1137,75 @@
             generateTimetableCombinations();
         }
         
+        // Alternative Course Management Functions
+        
+        // Create a new alternative course group
+        function createAlternativeGroup(courseCode1, courseCode2) {
+            const groupId = `alt_group_${alternativeGroupCounter++}`;
+            
+            // Remove courses from existing groups first
+            removeFromAlternativeGroup(courseCode1);
+            removeFromAlternativeGroup(courseCode2);
+            
+            // Create new group
+            alternativeCourseGroups[groupId] = [courseCode1, courseCode2];
+            courseToAlternativeGroup[courseCode1] = groupId;
+            courseToAlternativeGroup[courseCode2] = groupId;
+            
+            console.log(`Created alternative group ${groupId}:`, [courseCode1, courseCode2]);
+            updateSelectedLecturesDisplay();
+            generateTimetableCombinations();
+        }
+        
+        // Remove a course from its alternative group
+        function removeFromAlternativeGroup(courseCode) {
+            const groupId = courseToAlternativeGroup[courseCode];
+            if (groupId && alternativeCourseGroups[groupId]) {
+                const group = alternativeCourseGroups[groupId];
+                const index = group.indexOf(courseCode);
+                if (index > -1) {
+                    group.splice(index, 1);
+                }
+                
+                // Remove course mapping
+                delete courseToAlternativeGroup[courseCode];
+                
+                // If group has less than 2 courses, dissolve it
+                if (group.length < 2) {
+                    group.forEach(code => delete courseToAlternativeGroup[code]);
+                    delete alternativeCourseGroups[groupId];
+                }
+                
+                console.log(`Removed ${courseCode} from alternative group ${groupId}`);
+                updateSelectedLecturesDisplay();
+                generateTimetableCombinations();
+            }
+        }
+        
+        // Get all courses that can be alternatives to a given course
+        function getAvailableAlternatives(courseCode) {
+            return selectedLectures
+                .filter(lecture => lecture.Code !== courseCode && !courseToAlternativeGroup[lecture.Code])
+                .map(lecture => lecture.Code);
+        }
+        
+        // Check if a course is part of an alternative group
+        function isInAlternativeGroup(courseCode) {
+            return courseToAlternativeGroup[courseCode] !== undefined;
+        }
+        
+        // Get alternative group info for a course
+        function getAlternativeGroupInfo(courseCode) {
+            const groupId = courseToAlternativeGroup[courseCode];
+            if (groupId && alternativeCourseGroups[groupId]) {
+                return {
+                    groupId,
+                    alternatives: alternativeCourseGroups[groupId].filter(code => code !== courseCode)
+                };
+            }
+            return null;
+        }
+        
         // Update selected lectures display
         function updateSelectedLecturesDisplay() {
             const container = document.getElementById('selectedLectures');
@@ -1105,14 +1246,30 @@
                     filterSummary.push(`Sections: ${currentSectionPref.join(', ')}`);
                 }
                 
+                // Get alternative course information
+                const alternativeInfo = getAlternativeGroupInfo(lecture.Code);
+                const availableAlternatives = getAvailableAlternatives(lecture.Code);
+                
                 return `
                 <div class="selected-lecture-tag" style="display: flex; flex-direction: column; gap: 8px; padding: 12px; margin: 8px 0; background: ${lectureColor.bg}; color: ${lectureColor.text}; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); cursor: pointer; transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.15);" 
                      onclick="openLectureFilterPopup('${lecture.Code}')" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.25)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.15)';">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-weight: bold;">${lecture.Code} - ${lecture.Name}</span>
-                        <button onclick="event.stopPropagation(); toggleLectureSelection('${lecture.Code}')" class="remove-btn" 
-                                style="background: rgba(255,255,255,0.2); color: ${lectureColor.text}; border: 1px solid rgba(255,255,255,0.3); border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-weight: bold;">×</button>
+                        <div style="display: flex; gap: 4px;">
+                            <button onclick="event.stopPropagation(); showAlternativePopup('${lecture.Code}')" 
+                                    style="background: rgba(255,255,255,0.2); color: ${lectureColor.text}; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;" 
+                                    title="Manage alternative courses">🔄</button>
+                            <button onclick="event.stopPropagation(); toggleLectureSelection('${lecture.Code}')" class="remove-btn" 
+                                    style="background: rgba(255,255,255,0.2); color: ${lectureColor.text}; border: 1px solid rgba(255,255,255,0.3); border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-weight: bold;">×</button>
+                        </div>
                     </div>
+                    
+                    ${alternativeInfo ? `
+                    <div style="font-size: 11px; color: ${lectureColor.text}; background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.3);">
+                        🔄 Alternative to: ${alternativeInfo.alternatives.join(', ')}
+                    </div>
+                    ` : ''}
+                    
                     ${filterSummary.length > 0 ? `
                     <div style="font-size: 11px; color: ${lectureColor.text}; background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.3);">
                         📦 Filtered: ${filterSummary.join(' | ')}
@@ -1125,6 +1282,84 @@
                 </div>
                 `;
             }).join('');
+        }
+        
+        // Show alternative course popup
+        function showAlternativePopup(courseCode) {
+            const alternativeInfo = getAlternativeGroupInfo(courseCode);
+            const availableAlternatives = getAvailableAlternatives(courseCode);
+            
+            const popupHTML = `
+                <div id="alternativePopupOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; justify-content: center; align-items: center;">
+                    <div style="background: white; padding: 20px; border-radius: 12px; max-width: 500px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
+                        <h3 style="margin: 0 0 15px 0; color: #333;">Alternative Courses for ${courseCode}</h3>
+                        
+                        ${alternativeInfo ? `
+                            <div style="background: #e8f5e8; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #4caf50;">
+                                <strong>🔄 Currently paired with:</strong> ${alternativeInfo.alternatives.join(', ')}
+                                <div style="margin-top: 8px;">
+                                    <button onclick="removeFromAlternativeGroup('${courseCode}'); closeAlternativePopup();" 
+                                            style="background: #ff5722; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                        Remove from alternative group
+                                    </button>
+                                </div>
+                            </div>
+                        ` : `
+                            <div style="background: #fff3e0; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ff9800;">
+                                <strong>ℹ️ Not in any alternative group</strong>
+                                <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">You can create an alternative group by selecting another course below.</p>
+                            </div>
+                        `}
+                        
+                        ${availableAlternatives.length > 0 ? `
+                            <div style="margin-bottom: 15px;">
+                                <strong>Available alternatives:</strong>
+                                <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+                                    ${availableAlternatives.map(altCode => `
+                                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #f5f5f5; border-radius: 6px;">
+                                            <span>${altCode}</span>
+                                            <button onclick="createAlternativeGroup('${courseCode}', '${altCode}'); closeAlternativePopup();" 
+                                                    style="background: #4caf50; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                                ${alternativeInfo ? 'Switch to this alternative' : 'Create alternative group'}
+                                            </button>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : `
+                            <div style="background: #ffebee; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #f44336;">
+                                <strong>⚠️ No available alternatives</strong>
+                                <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">All other selected courses are already in alternative groups.</p>
+                            </div>
+                        `}
+                        
+                        <div style="text-align: right; margin-top: 15px;">
+                            <button onclick="closeAlternativePopup()" style="background: #2196f3; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+                                Done
+                            </button>
+                        </div>
+                        
+                        <div style="margin-top: 15px; padding: 12px; background: #f0f8ff; border-radius: 6px; border: 1px solid #2196f3;">
+                            <strong>💡 How Alternative Courses Work:</strong>
+                            <ul style="margin: 5px 0 0 0; padding-left: 15px; font-size: 13px; color: #666;">
+                                <li>Only one course from each alternative group will appear in any timetable combination</li>
+                                <li>This helps when you need to choose between similar courses</li>
+                                <li>Alternative groups allow more flexible scheduling options</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', popupHTML);
+        }
+        
+        // Close alternative popup
+        function closeAlternativePopup() {
+            const overlay = document.getElementById('alternativePopupOverlay');
+            if (overlay) {
+                overlay.remove();
+            }
         }
         
         // Generate all possible timetable combinations
@@ -1143,104 +1378,92 @@
             
             combinationsContainer.style.display = 'block';
             
-            // Get all sections for each selected lecture, filtered by lecturer and section preferences
-            const lectureOptions = selectedLectures.map(selected => {
-                // Get all sections for this lecture code
-                const sectionsForCode = {};
-                allLectures.forEach(lecture => {
-                    if (lecture.Code === selected.Code) {
-                        // Check lecturer preference filter
-                        const preferredLecturers = lecturerPreferences[selected.Code];
-                        if (preferredLecturers && preferredLecturers.length > 0) {
-                            if (!preferredLecturers.includes(lecture.Lecturer)) {
-                                return; // Skip this lecture if lecturer not in preferred list
-                            }
-                        }
-                        
-                        // Check section preference filter
-                        const preferredSections = sectionPreferences[selected.Code];
-                        if (preferredSections && preferredSections.length > 0) {
-                            if (!preferredSections.includes(lecture.Section)) {
-                                return; // Skip this lecture if section not in preferred list
-                            }
-                        }
-                        
-                        const sectionKey = lecture.Section;
-                        if (!sectionsForCode[sectionKey]) {
-                            sectionsForCode[sectionKey] = [];
-                        }
-                        sectionsForCode[sectionKey].push(lecture);
-                    }
-                });
-                
-                const sectionsArray = Object.values(sectionsForCode);
-                
-                // Check if preferences resulted in no available sections
-                if (sectionsArray.length === 0) {
-                    const lecturerFilter = lecturerPreferences[selected.Code] ? lecturerPreferences[selected.Code].join(', ') : 'any';
-                    const sectionFilter = sectionPreferences[selected.Code] ? sectionPreferences[selected.Code].join(', ') : 'any';
-                    console.warn(`No sections available for ${selected.Code} with filters - Lecturers: ${lecturerFilter}, Sections: ${sectionFilter}`);
-                }
-                
-                // Return array of section groups (each section contains all its time slots)
-                return sectionsArray;
-            }).filter(sections => sections.length > 0); // Filter out empty lecture options
+            // Group selected lectures by alternative groups
+            const alternativeGroups = {};
+            const independentLectures = [];
             
-            // Check if any lectures have no available sections due to preferences
-            if (lectureOptions.length < selectedLectures.length) {
-                const missingLectures = selectedLectures.filter((selected, index) => {
+            selectedLectures.forEach(selected => {
+                const groupId = courseToAlternativeGroup[selected.Code];
+                if (groupId) {
+                    if (!alternativeGroups[groupId]) {
+                        alternativeGroups[groupId] = [];
+                    }
+                    alternativeGroups[groupId].push(selected);
+                } else {
+                    independentLectures.push(selected);
+                }
+            });
+            
+            // Create lecture options for combination generation
+            // For alternative groups, create separate option sets for each course in the group
+            const lectureOptionSets = [];
+            
+            // Add independent lectures (not in alternative groups)
+            independentLectures.forEach(selected => {
+                lectureOptionSets.push([selected]);
+            });
+            
+            // Add alternative groups (each group becomes one option set with multiple courses)
+            Object.values(alternativeGroups).forEach(groupLectures => {
+                lectureOptionSets.push(groupLectures);
+            });
+            
+            // Get all sections for each lecture option set, filtered by preferences
+            const processedLectureOptions = lectureOptionSets.map(lectureSet => {
+                return lectureSet.map(selected => {
                     const sectionsForCode = {};
                     allLectures.forEach(lecture => {
                         if (lecture.Code === selected.Code) {
+                            // Check lecturer preference filter
                             const preferredLecturers = lecturerPreferences[selected.Code];
-                            const preferredSections = sectionPreferences[selected.Code];
-                            
-                            let includeThis = true;
-                            
                             if (preferredLecturers && preferredLecturers.length > 0) {
-                                includeThis = includeThis && preferredLecturers.includes(lecture.Lecturer);
+                                if (!preferredLecturers.includes(lecture.Lecturer)) {
+                                    return;
+                                }
                             }
                             
+                            // Check section preference filter
+                            const preferredSections = sectionPreferences[selected.Code];
                             if (preferredSections && preferredSections.length > 0) {
-                                includeThis = includeThis && preferredSections.includes(lecture.Section);
+                                if (!preferredSections.includes(lecture.Section)) {
+                                    return;
+                                }
                             }
                             
-                            if (includeThis) {
-                                sectionsForCode[lecture.Section] = true;
+                            const sectionKey = lecture.Section;
+                            if (!sectionsForCode[sectionKey]) {
+                                sectionsForCode[sectionKey] = [];
                             }
+                            sectionsForCode[sectionKey].push(lecture);
                         }
                     });
-                    return Object.keys(sectionsForCode).length === 0;
-                });
-                
-                if (missingLectures.length > 0) {
-                    const filterDetails = missingLectures.map(l => {
-                        const lecturerFilter = lecturerPreferences[l.Code] ? lecturerPreferences[l.Code].join(', ') : 'any';
-                        const sectionFilter = sectionPreferences[l.Code] ? sectionPreferences[l.Code].join(', ') : 'any';
-                        return `<strong>${l.Code}</strong> (Lecturers: ${lecturerFilter}, Sections: ${sectionFilter})`;
-                    }).join('<br>');
                     
-                    container.innerHTML = `<p style="color: #dc3545; text-align: center; padding: 20px;">No sections available for the selected filters.<br>
-                        <small>The following lectures have no sections matching your preferences:<br>
-                        ${filterDetails}<br>
-                        Click on the lectures above to adjust your filters.</small></p>`;
-                    timetableControls.style.display = 'none';
-                    clearTimetable();
-                    return;
-                }
+                    const sectionsArray = Object.values(sectionsForCode);
+                    return { courseCode: selected.Code, sections: sectionsArray };
+                });
+            });
+            
+            // Check if any processed lecture options are empty (no valid sections)
+            const emptyOptions = processedLectureOptions.findIndex(optionSet => 
+                optionSet.every(courseOption => courseOption.sections.length === 0)
+            );
+            
+            if (emptyOptions !== -1) {
+                container.innerHTML = `<p style="color: #dc3545; text-align: center; padding: 20px;">No sections available for some selected courses with current filters.<br>
+                    <small>Please adjust your lecturer or section preferences and try again.</small></p>`;
+                timetableControls.style.display = 'none';
+                clearTimetable();
+                return;
             }
             
-            // Generate all combinations
-            const combinations = generateCombinations(lectureOptions);
+            // Generate combinations respecting alternative course groups
+            const combinations = generateAlternativeCombinations(processedLectureOptions);
             
-            // Filter out combinations with time conflicts
-            validCombinations = combinations.filter(combination => !hasTimeConflict(combination));
+            // Store all combinations for display
+            validCombinations = combinations;
             
             if (validCombinations.length === 0) {
-                const totalCombinations = combinations.length;
-                container.innerHTML = `<p style="color: #dc3545; text-align: center; padding: 20px;">No valid combinations found with current conflict settings.<br>
-                    <small>Found ${totalCombinations} total combinations, but all exceed ${maxAllowedConflicts} allowed conflict hours.<br>
-                    Try increasing the maximum allowed conflicts above.</small></p>`;
+                container.innerHTML = `<p style="color: #dc3545; text-align: center; padding: 20px;">No combinations possible with current selections and alternative course constraints.</p>`;
                 timetableControls.style.display = 'none';
                 clearTimetable();
                 return;
@@ -1253,13 +1476,18 @@
             // Display combinations list with conflict information
             container.innerHTML = validCombinations.map((combination, index) => {
                 const conflictCount = countTimeConflicts(combination);
+                const isValidCombination = conflictCount <= maxAllowedConflicts;
+                
                 const conflictBadge = conflictCount > 0 ? 
-                    `<span style="background: #ffc107; color: #856404; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 10px;">${conflictCount} conflict${conflictCount > 1 ? 's' : ''}</span>` : 
+                    `<span style="background: ${isValidCombination ? '#ffc107' : '#dc3545'}; color: ${isValidCombination ? '#856404' : 'white'}; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 10px;">${conflictCount} conflict${conflictCount > 1 ? 's' : ''}${isValidCombination ? '' : ' (EXCEEDS LIMIT)'}</span>` : 
                     '<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 10px;">No conflicts</span>';
                 
+                const borderColor = isValidCombination ? (conflictCount > 0 ? '#ffc107' : '#28a745') : '#dc3545';
+                const backgroundColor = isValidCombination ? 'white' : '#fff5f5';
+                
                 return `
-                <div style="margin-bottom: 20px; padding: 15px; border: 2px solid #e0e0e0; border-radius: 10px; background: white;">
-                    <h4 style="margin: 0 0 15px 0; color: #007bff; display: flex; align-items: center;">Combination ${index + 1}${conflictBadge}</h4>
+                <div style="margin-bottom: 20px; padding: 15px; border: 2px solid ${borderColor}; border-radius: 10px; background: ${backgroundColor};">
+                    <h4 style="margin: 0 0 15px 0; color: ${isValidCombination ? '#007bff' : '#dc3545'}; display: flex; align-items: center;">Combination ${index + 1}${conflictBadge}</h4>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px;">
                         ${combination.map(lectureGroup => {
                             const firstLecture = lectureGroup[0];
@@ -1276,15 +1504,19 @@
                             `;
                         }).join('')}
                     </div>
-                    <button onclick="selectCombinationInDropdown(${index})" style="margin-top: 15px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                        Show in Timetable
+                    <button onclick="selectCombinationInDropdown(${index})" style="margin-top: 15px; padding: 8px 16px; background: ${isValidCombination ? '#007bff' : '#6c757d'}; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        ${isValidCombination ? 'Show in Timetable' : 'View Conflicts'}
                     </button>
                 </div>
                 `;
             }).join('');
             
-            // Auto-select first combination if available
-            if (validCombinations.length > 0) {
+            // Auto-select first valid combination if available, otherwise first combination
+            const firstValidIndex = validCombinations.findIndex(combination => countTimeConflicts(combination) <= maxAllowedConflicts);
+            if (firstValidIndex !== -1) {
+                currentCombinationIndex = firstValidIndex;
+                displayCombinationInTimetable();
+            } else if (validCombinations.length > 0) {
                 currentCombinationIndex = 0;
                 displayCombinationInTimetable();
             }
@@ -1295,12 +1527,19 @@
             const selector = document.getElementById('combinationSelector');
             const info = document.getElementById('combinationInfo');
             
-            selector.innerHTML = '<option value="">Select a combination...</option>' +
-                validCombinations.map((combination, index) => 
-                    `<option value="${index}">Combination ${index + 1} (${combination.length} lectures)</option>`
-                ).join('');
+            const validCount = validCombinations.filter(combination => countTimeConflicts(combination) <= maxAllowedConflicts).length;
+            const conflictedCount = validCombinations.length - validCount;
             
-            info.textContent = `${validCombinations.length} valid combination(s) found`;
+            selector.innerHTML = '<option value="">Select a combination...</option>' +
+                validCombinations.map((combination, index) => {
+                    const conflictCount = countTimeConflicts(combination);
+                    const isValid = conflictCount <= maxAllowedConflicts;
+                    const conflictText = conflictCount > 0 ? ` (${conflictCount} conflicts)` : '';
+                    const statusText = isValid ? '' : ' - EXCEEDS LIMIT';
+                    return `<option value="${index}">Combination ${index + 1}${conflictText}${statusText}</option>`;
+                }).join('');
+            
+            info.textContent = `${validCount} valid, ${conflictedCount} conflicted combination(s) found`;
         }
         
         // Select combination from dropdown
@@ -1434,19 +1673,22 @@
                             // Clear unlocked slots
                             cell.innerHTML = '';
                             cell.className = 'timetable-cell';
+                            cell.style.pointerEvents = '';
                         }
+                        cell.classList.remove('occupied-continuation');
+                        
+                        // Remove any conflict indicators
+                        const conflictIndicators = cell.querySelectorAll('.conflict-indicator');
+                        conflictIndicators.forEach(indicator => indicator.remove());
                     }
                 });
             });
             console.log('Modern timetable cleared, locked slots preserved');
         }
         
-        // Place a lecture in the correct timetable cells - spanning multiple rows
+        // Place a lecture in the timetable with conflict visualization
         function placeLectureInTimetable(lecture) {
-            console.log('=== Placing lecture ===');
-            console.log('Lecture object:', lecture);
-            
-            if (!lecture || !lecture.Day || (!lecture.StartHour && lecture.StartHour !== 0)) {
+            if (!lecture || !lecture.Day || lecture.StartHour === undefined) {
                 console.error('Invalid lecture data:', lecture);
                 return;
             }
@@ -1459,53 +1701,181 @@
             // Get the assigned color for this lecture
             const lectureColor = getLectureColor(lecture.Code);
             
-            console.log(`Placing ${lecture.Code} on ${day} from ${startHour}:00 to ${endHour}:00 (${duration} hours)`);
+            // Check for conflicts with this lecture
+            const conflicts = findConflictsForLecture(lecture);
+            const hasConflicts = conflicts.length > 0;
             
-            // Clear all cells that this lecture will span
-            for (let hour = startHour; hour < endHour; hour++) {
-                const cellId = `cell_${day}_${hour}`;
-                const cell = document.getElementById(cellId);
-                if (cell) {
-                    cell.innerHTML = '';
-                    cell.className = 'timetable-cell';
-                    cell.style.pointerEvents = '';
-                    cell.classList.remove('occupied-continuation');
-                }
-            }
-            
-            // Place the lecture block only in the first cell, but make it span multiple rows
+            // Place the lecture block in the first cell and span multiple rows
             const firstCellId = `cell_${day}_${startHour}`;
             const firstCell = document.getElementById(firstCellId);
             
             if (firstCell) {
-                // Calculate the height needed based on actual cell dimensions
-                // Each cell: min-height 58px + 2px border (1px top + 1px bottom) = 60px total
-                const cellHeight = 60; // 58px min-height + 2px border
-                const blockHeight = (duration * cellHeight) - 4; // -4 for internal padding
+                const cellHeight = 60; // Each cell height
+                const blockHeight = (duration * cellHeight) - 4;
                 
-                firstCell.innerHTML = `
-                    <div class="lecture-block multi-row" style="height: ${blockHeight}px; background: ${lectureColor.bg}; color: ${lectureColor.text}; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
-                        <div class="lecture-code" style="font-size: ${duration >= 3 ? '14px' : '12px'}; font-weight: bold; margin-bottom: 4px;">${lecture.Code}</div>
-                        <div class="lecture-section" style="font-size: ${duration >= 3 ? '12px' : '10px'}; opacity: 0.9; margin-bottom: 4px;">Sec ${lecture.Section}</div>
-                        <div class="lecture-lecturer" style="font-size: ${duration >= 3 ? '11px' : '9px'}; opacity: 0.8; line-height: 1.3;">${lecture.Lecturer || 'TBA'}</div>
+                // Check if there's already a lecture in this cell (conflict)
+                const existingLectures = firstCell.querySelectorAll('.lecture-block');
+                
+                if (existingLectures.length > 0) {
+                    // Conflict situation - shrink existing lectures and add new one
+                    existingLectures.forEach(block => {
+                        block.classList.add('conflicted');
+                        block.style.width = '45%';
+                        block.style.left = '2px';
+                        block.style.border = '2px solid #dc3545';
+                    });
+                    
+                    // Create new conflicted lecture block
+                    const lectureBlock = document.createElement('div');
+                    lectureBlock.className = 'lecture-block multi-row conflicted';
+                    lectureBlock.style.cssText = `
+                        height: ${blockHeight}px;
+                        background: ${lectureColor.bg};
+                        color: ${lectureColor.text};
+                        border: 2px solid #dc3545;
+                        width: 45%;
+                        right: 2px;
+                        position: absolute;
+                        border-radius: 8px;
+                        padding: 8px 4px;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                        align-items: center;
+                        text-align: center;
+                        z-index: 12;
+                    `;
+                    
+                    lectureBlock.innerHTML = `
+                        <div style="font-size: 10px; font-weight: bold; margin-bottom: 2px;">${lecture.Code}</div>
+                        <div style="font-size: 8px; opacity: 0.9; margin-bottom: 2px;">Sec ${lecture.Section}</div>
+                        <div style="font-size: 7px; opacity: 0.8;">${lecture.Lecturer || 'TBA'}</div>
+                        <div style="font-size: 6px; color: #dc3545; font-weight: bold; margin-top: 2px;">CONFLICT</div>
+                    `;
+                    
+                    firstCell.appendChild(lectureBlock);
+                    
+                    // Add central conflict indicator
+                    if (!firstCell.querySelector('.conflict-indicator')) {
+                        const conflictIndicator = document.createElement('div');
+                        conflictIndicator.className = 'conflict-indicator';
+                        conflictIndicator.innerHTML = `
+                            <div>⚠️</div>
+                            <div style="font-size: 8px; margin-top: 1px;">CONFLICT</div>
+                            <div style="font-size: 6px;">${startHour}:00-${endHour}:00</div>
+                        `;
+                        firstCell.appendChild(conflictIndicator);
+                    }
+                } else {
+                    // No conflict - place lecture normally
+                    const lectureBlock = document.createElement('div');
+                    lectureBlock.className = `lecture-block multi-row ${hasConflicts ? 'conflicted' : ''}`;
+                    lectureBlock.style.cssText = `
+                        height: ${blockHeight}px;
+                        background: ${lectureColor.bg};
+                        color: ${lectureColor.text};
+                        border-radius: 8px;
+                        padding: 12px 8px;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                        align-items: center;
+                        text-align: center;
+                        position: absolute;
+                        width: 100%;
+                        left: 0;
+                        z-index: 10;
+                    `;
+                    
+                    lectureBlock.innerHTML = `
+                        <div style="font-size: ${duration >= 3 ? '14px' : '12px'}; font-weight: bold; margin-bottom: 4px;">${lecture.Code}</div>
+                        <div style="font-size: ${duration >= 3 ? '12px' : '10px'}; opacity: 0.9; margin-bottom: 4px;">Sec ${lecture.Section}</div>
+                        <div style="font-size: ${duration >= 3 ? '11px' : '9px'}; opacity: 0.8;">${lecture.Lecturer || 'TBA'}</div>
                         <div style="font-size: ${duration >= 3 ? '10px' : '8px'}; opacity: 0.7; margin-top: 4px;">${startHour}:00-${endHour}:00</div>
-                    </div>
-                `;
+                    `;
+                    
+                    firstCell.appendChild(lectureBlock);
+                }
                 
-                // Mark subsequent cells as occupied (but empty) to prevent clicking
+                // Mark subsequent cells as occupied
                 for (let hour = startHour + 1; hour < endHour; hour++) {
                     const cellId = `cell_${day}_${hour}`;
                     const cell = document.getElementById(cellId);
                     if (cell) {
-                        cell.style.pointerEvents = 'none'; // Prevent clicking on continuation cells
+                        cell.style.pointerEvents = 'none';
                         cell.classList.add('occupied-continuation');
                     }
                 }
-            } else {
-                console.error(`Cell not found: ${firstCellId}`);
+            }
+        }
+        
+        // Find conflicts for a specific lecture within the current combination
+        function findConflictsForLecture(targetLecture) {
+            if (!validCombinations[currentCombinationIndex]) return [];
+            
+            const currentCombination = validCombinations[currentCombinationIndex];
+            const conflicts = [];
+            
+            // Get all lectures in the current combination
+            const allLecturesInCombination = [];
+            currentCombination.forEach(lectureGroup => {
+                lectureGroup.forEach(lecture => {
+                    allLecturesInCombination.push(lecture);
+                });
+            });
+            
+            // Check for time overlaps with other lectures
+            allLecturesInCombination.forEach(otherLecture => {
+                if (otherLecture.Code !== targetLecture.Code && 
+                    otherLecture.Day === targetLecture.Day) {
+                    
+                    // Check if time ranges overlap
+                    const targetStart = targetLecture.StartHour;
+                    const targetEnd = targetLecture.EndHour;
+                    const otherStart = otherLecture.StartHour;
+                    const otherEnd = otherLecture.EndHour;
+                    
+                    if (targetStart < otherEnd && otherStart < targetEnd) {
+                        conflicts.push(otherLecture);
+                    }
+                }
+            });
+            
+            return conflicts;
+        }
+        
+        // Generate combinations respecting alternative course groups
+        function generateAlternativeCombinations(processedLectureOptions) {
+            const combinations = [];
+            
+            function generateRecursive(optionIndex, currentCombination) {
+                if (optionIndex >= processedLectureOptions.length) {
+                    combinations.push([...currentCombination]);
+                    return;
+                }
+                
+                const currentOptionSet = processedLectureOptions[optionIndex];
+                
+                // For each course option in this set (alternative group or single course)
+                for (const courseOption of currentOptionSet) {
+                    const courseCode = courseOption.courseCode;
+                    const sections = courseOption.sections;
+                    
+                    // Skip if no sections available for this course
+                    if (sections.length === 0) continue;
+                    
+                    // For each section of this course
+                    for (const section of sections) {
+                        // Add this section to the combination and recurse
+                        currentCombination.push(section);
+                        generateRecursive(optionIndex + 1, currentCombination);
+                        currentCombination.pop();
+                    }
+                }
             }
             
-            console.log(`Lecture ${lecture.Code} placed successfully as ${duration}-hour spanning block`);
+            generateRecursive(0, []);
+            return combinations;
         }
         
         // Generate all possible combinations from arrays
@@ -1526,43 +1896,42 @@
         }
         
         // Check if a combination has time conflicts - updated for multiple time slots and locked slots
-        // Global variable to store maximum allowed conflicts
-        let maxAllowedConflicts = 0;
+        // Global variable to store maximum allowed conflicts (already declared above)
         
         function countTimeConflicts(combination) {
-            // Get all time slots for all lectures in the combination
             const allTimeSlots = [];
             
+            // Extract all time slots from the combination
             combination.forEach(lectureGroup => {
-                // lectureGroup contains all time slots for a selected lecture section
                 const lectureCode = lectureGroup[0].Code;
                 const lectureSection = lectureGroup[0].Section;
                 
                 lectureGroup.forEach(lecture => {
-                    allTimeSlots.push({
-                        Code: lectureCode,
-                        Section: lectureSection,
-                        Day: lecture.Day,
-                        StartHour: lecture.StartHour,
-                        EndHour: lecture.EndHour
-                    });
+                    // Add each hour as a separate slot for precise conflict detection
+                    for (let hour = lecture.StartHour; hour < lecture.EndHour; hour++) {
+                        allTimeSlots.push({
+                            Code: lectureCode,
+                            Section: lectureSection,
+                            Day: lecture.Day,
+                            Hour: hour,
+                            StartHour: lecture.StartHour,
+                            EndHour: lecture.EndHour
+                        });
+                    }
                 });
             });
             
             let conflictHours = 0;
             
             // Check for conflicts with locked time slots
-            for (const timeSlot of allTimeSlots) {
-                for (let hour = timeSlot.StartHour; hour < timeSlot.EndHour; hour++) {
-                    const slotKey = `${timeSlot.Day}_${hour}`;
-                    if (lockedTimeSlots.has(slotKey)) {
-                        console.log('Conflict with locked slot:', slotKey, 'for lecture:', timeSlot.Code);
-                        conflictHours++;
-                    }
+            allTimeSlots.forEach(slot => {
+                const slotKey = `${slot.Day}_${slot.Hour}`;
+                if (lockedTimeSlots.has(slotKey)) {
+                    conflictHours++;
                 }
-            }
+            });
             
-            // Check for conflicts between all time slots
+            // Check for conflicts between lectures
             for (let i = 0; i < allTimeSlots.length; i++) {
                 for (let j = i + 1; j < allTimeSlots.length; j++) {
                     const slot1 = allTimeSlots[i];
@@ -1573,18 +1942,11 @@
                         continue;
                     }
                     
-                    // Check if they're on the same day
-                    if (slot1.Day === slot2.Day) {
-                        // Calculate overlapping hours
-                        const overlapStart = Math.max(slot1.StartHour, slot2.StartHour);
-                        const overlapEnd = Math.min(slot1.EndHour, slot2.EndHour);
-                        
-                        if (overlapStart < overlapEnd) {
-                            const overlapHours = overlapEnd - overlapStart;
-                            conflictHours += overlapHours;
-                            console.log(`Time conflict detected: ${overlapHours} hours between`, 
-                                `${slot1.Code}-${slot1.Section} vs ${slot2.Code}-${slot2.Section} on ${slot1.Day}`);
-                        }
+                    // Check if same day and hour (conflict)
+                    if (slot1.Day === slot2.Day && slot1.Hour === slot2.Hour) {
+                        conflictHours++;
+                        console.log(`Conflict detected: ${slot1.Code} vs ${slot2.Code} at ${slot1.Day} ${slot1.Hour}:00`);
+                        break; // Count each conflicting hour only once
                     }
                 }
             }
@@ -1601,6 +1963,44 @@
         function timeRangesOverlap(range1, range2) {
             return range1.start < range2.end && range2.start < range1.end;
         }
+        
+        // Find conflicts for a specific lecture within the current combination
+        function findConflictsForLecture(targetLecture) {
+            if (!validCombinations[currentCombinationIndex]) return [];
+            
+            const currentCombination = validCombinations[currentCombinationIndex];
+            const conflicts = [];
+            
+            // Get all lectures in the current combination
+            const allLecturesInCombination = [];
+            currentCombination.forEach(lectureGroup => {
+                lectureGroup.forEach(lecture => {
+                    allLecturesInCombination.push(lecture);
+                });
+            });
+            
+            // Check for time overlaps with other lectures
+            allLecturesInCombination.forEach(otherLecture => {
+                if (otherLecture.Code !== targetLecture.Code && 
+                    otherLecture.Day === targetLecture.Day) {
+                    
+                    // Check if time ranges overlap
+                    const targetStart = targetLecture.StartHour;
+                    const targetEnd = targetLecture.EndHour;
+                    const otherStart = otherLecture.StartHour;
+                    const otherEnd = otherLecture.EndHour;
+                    
+                    if (targetStart < otherEnd && otherStart < targetEnd) {
+                        conflicts.push(otherLecture);
+                    }
+                }
+            });
+            
+            return conflicts;
+        }
+        
+        // Global variable to store maximum allowed conflicts
+        let maxAllowedConflicts = 0;
         
         // Update conflict settings when slider changes
         function updateConflictSettings() {
