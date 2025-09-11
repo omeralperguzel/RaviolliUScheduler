@@ -276,7 +276,7 @@
             top: 2px;
             left: 2px;
             right: 2px;
-            bottom: 2px;
+            height: 54px; /* Fixed height to match timetable cell (58px - 4px for top/bottom margins) */
             border-radius: 8px;
             padding: 8px;
             color: white;
@@ -301,6 +301,7 @@
             position: absolute;
             border-radius: 8px;
             padding: 12px 8px;
+            height: auto; /* Multi-row blocks can span multiple cells, so use auto height */
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -379,20 +380,16 @@
             border: 2px solid #dc3545;
         }
         
-        .lecture-block.conflicted {
-            width: 45% !important;
-            z-index: 12;
-            border: 2px solid #dc3545;
-            box-shadow: 0 2px 8px rgba(220, 53, 69, 0.4);
+        .conflict-box {
+            background: linear-gradient(135deg, #dc3545, #c82333) !important;
+            border: 2px solid #dc3545 !important;
+            box-shadow: 0 2px 8px rgba(220, 53, 69, 0.6) !important;
+            animation: conflictPulse 2s infinite;
         }
         
-        .lecture-block.conflicted:first-child {
-            left: 2px;
-        }
-        
-        .lecture-block.conflicted:last-child {
-            right: 2px;
-            left: auto;
+        @keyframes conflictPulse {
+            0%, 100% { box-shadow: 0 2px 8px rgba(220, 53, 69, 0.6); }
+            50% { box-shadow: 0 4px 16px rgba(220, 53, 69, 0.8); }
         }
         
                 .conflict-indicator {
@@ -413,20 +410,16 @@
             backdrop-filter: blur(2px);
         }
         
-        .lecture-block.conflicted {
-            width: 48% !important;
-            z-index: 12;
+        .conflict-box {
+            background: linear-gradient(135deg, #dc3545, #c82333) !important;
             border: 2px solid #dc3545 !important;
-            box-shadow: 0 2px 8px rgba(220, 53, 69, 0.4) !important;
+            box-shadow: 0 2px 8px rgba(220, 53, 69, 0.6) !important;
+            animation: conflictPulse 2s infinite;
         }
         
-        .lecture-block.conflicted.first {
-            left: 1% !important;
-        }
-        
-        .lecture-block.conflicted.second {
-            right: 1% !important;
-            left: auto !important;
+        @keyframes conflictPulse {
+            0%, 100% { box-shadow: 0 2px 8px rgba(220, 53, 69, 0.6); }
+            50% { box-shadow: 0 4px 16px rgba(220, 53, 69, 0.8); }
         }
         
         @media (max-width: 768px) {
@@ -1818,111 +1811,254 @@
                 return;
             }
             
+            const conflicts = findConflictsForLecture(lecture);
+            const hasConflicts = conflicts.length > 0;
+            
+            if (hasConflicts) {
+                // Handle conflicted lecture with new algorithm
+                placeConflictedLecture(lecture, conflicts);
+            } else {
+                // Handle non-conflicted lecture normally
+                placeNonConflictedLecture(lecture);
+            }
+        }
+        
+        // Place non-conflicted lecture (original logic)
+        function placeNonConflictedLecture(lecture) {
             const day = lecture.Day;
             const startHour = lecture.StartHour;
             const endHour = lecture.EndHour;
             const duration = endHour - startHour;
-            
-            // Get the assigned color for this lecture
             const lectureColor = getLectureColor(lecture.Code);
             
-            // Check for conflicts with this lecture
-            const conflicts = findConflictsForLecture(lecture);
-            const hasConflicts = conflicts.length > 0;
-            
-            // Place the lecture block in the first cell and span multiple rows
             const firstCellId = `cell_${day}_${startHour}`;
             const firstCell = document.getElementById(firstCellId);
             
             if (firstCell) {
-                const cellHeight = 60; // Each cell height
+                const cellHeight = 60;
                 const blockHeight = (duration * cellHeight) - 4;
                 
-                // Check if there's already a lecture in this cell (conflict)
-                const existingLectures = firstCell.querySelectorAll('.lecture-block');
+                const lectureBlock = document.createElement('div');
+                lectureBlock.className = 'lecture-block multi-row';
+                lectureBlock.style.cssText = `
+                    height: ${blockHeight}px;
+                    background: ${lectureColor.bg};
+                    color: ${lectureColor.text};
+                    border-radius: 8px;
+                    padding: 12px 8px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                    text-align: center;
+                    position: absolute;
+                    width: 100%;
+                    left: 0;
+                    z-index: 10;
+                `;
                 
-                if (existingLectures.length > 0) {
-                    // Conflict situation - shrink existing lectures and add new one
-                    existingLectures.forEach(block => {
-                        block.classList.add('conflicted');
-                        block.style.width = '45%';
-                        block.style.left = '2px';
-                        block.style.border = '2px solid #dc3545';
-                    });
-                    
-                    // Create new conflicted lecture block
-                    const lectureBlock = document.createElement('div');
-                    lectureBlock.className = 'lecture-block multi-row conflicted';
-                    lectureBlock.style.cssText = `
-                        height: ${blockHeight}px;
-                        background: ${lectureColor.bg};
-                        color: ${lectureColor.text};
-                        border: 2px solid #dc3545;
-                        width: 45%;
-                        right: 2px;
-                        position: absolute;
-                        border-radius: 8px;
-                        padding: 8px 4px;
-                        display: flex;
-                        flex-direction: column;
-                        justify-content: center;
-                        align-items: center;
-                        text-align: center;
-                        z-index: 12;
-                    `;
-                    
-                    lectureBlock.innerHTML = `
-                        <div style="font-size: 10px; font-weight: bold; margin-bottom: 2px;">${lecture.Code}</div>
-                        <div style="font-size: 8px; opacity: 0.9; margin-bottom: 2px;">Sec ${lecture.Section}</div>
-                        <div style="font-size: 7px; opacity: 0.8; margin-bottom: 1px;">${lecture.Lecturer || 'TBA'}</div>
-                        <div style="font-size: 6px; opacity: 0.7; margin-bottom: 2px;">${lecture.Room || 'TBA'}</div>
-                        <div style="font-size: 6px; color: #dc3545; font-weight: bold; margin-top: 2px;">CONFLICT</div>
-                    `;
-                    
-                    firstCell.appendChild(lectureBlock);
-                    
-                    // Add central conflict indicator
-                    if (!firstCell.querySelector('.conflict-indicator')) {
-                        const conflictIndicator = document.createElement('div');
-                        conflictIndicator.className = 'conflict-indicator';
-                        conflictIndicator.innerHTML = `
-                            <div>⚠️</div>
-                            <div style="font-size: 8px; margin-top: 1px;">CONFLICT</div>
-                            <div style="font-size: 6px;">${startHour}:00-${endHour}:00</div>
-                        `;
-                        firstCell.appendChild(conflictIndicator);
+                lectureBlock.innerHTML = `
+                    <div style="font-size: ${duration >= 3 ? '14px' : '12px'}; font-weight: bold; margin-bottom: 4px;">${lecture.Code}</div>
+                    <div style="font-size: ${duration >= 3 ? '12px' : '10px'}; opacity: 0.9; margin-bottom: 4px;">Sec ${lecture.Section}</div>
+                    <div style="font-size: ${duration >= 3 ? '11px' : '9px'}; opacity: 0.8; margin-bottom: 3px;">${lecture.Lecturer || 'TBA'}</div>
+                    <div style="font-size: ${duration >= 3 ? '10px' : '8px'}; opacity: 0.7; margin-bottom: 3px;">${lecture.Room || 'TBA'}</div>
+                    <div style="font-size: ${duration >= 3 ? '10px' : '8px'}; opacity: 0.7; margin-top: 4px;">${startHour}:00-${endHour}:00</div>
+                `;
+                
+                firstCell.appendChild(lectureBlock);
+                
+                // Mark subsequent cells as occupied
+                for (let hour = startHour + 1; hour < endHour; hour++) {
+                    const cellId = `cell_${day}_${hour}`;
+                    const cell = document.getElementById(cellId);
+                    if (cell) {
+                        cell.style.pointerEvents = 'none';
+                        cell.classList.add('occupied-continuation');
                     }
-                } else {
-                    // No conflict - place lecture normally
-                    const lectureBlock = document.createElement('div');
-                    lectureBlock.className = `lecture-block multi-row ${hasConflicts ? 'conflicted' : ''}`;
-                    lectureBlock.style.cssText = `
-                        height: ${blockHeight}px;
-                        background: ${lectureColor.bg};
-                        color: ${lectureColor.text};
-                        border-radius: 8px;
-                        padding: 12px 8px;
-                        display: flex;
-                        flex-direction: column;
-                        justify-content: center;
-                        align-items: center;
-                        text-align: center;
-                        position: absolute;
-                        width: 100%;
-                        left: 0;
-                        z-index: 10;
-                    `;
-                    
-                    lectureBlock.innerHTML = `
-                        <div style="font-size: ${duration >= 3 ? '14px' : '12px'}; font-weight: bold; margin-bottom: 4px;">${lecture.Code}</div>
-                        <div style="font-size: ${duration >= 3 ? '12px' : '10px'}; opacity: 0.9; margin-bottom: 4px;">Sec ${lecture.Section}</div>
-                        <div style="font-size: ${duration >= 3 ? '11px' : '9px'}; opacity: 0.8; margin-bottom: 3px;">${lecture.Lecturer || 'TBA'}</div>
-                        <div style="font-size: ${duration >= 3 ? '10px' : '8px'}; opacity: 0.7; margin-bottom: 3px;">${lecture.Room || 'TBA'}</div>
-                        <div style="font-size: ${duration >= 3 ? '10px' : '8px'}; opacity: 0.7; margin-top: 4px;">${startHour}:00-${endHour}:00</div>
-                    `;
-                    
-                    firstCell.appendChild(lectureBlock);
                 }
+            }
+        }
+        
+        // Handle conflicted lectures with new algorithm
+        function placeConflictedLecture(lecture, conflicts) {
+            // Find all conflicted time intervals for this specific lecture
+            const conflictedHours = new Set();
+            
+            conflicts.forEach(conflictLecture => {
+                const overlapStart = Math.max(lecture.StartHour, conflictLecture.StartHour);
+                const overlapEnd = Math.min(lecture.EndHour, conflictLecture.EndHour);
+                
+                for (let hour = overlapStart; hour < overlapEnd; hour++) {
+                    conflictedHours.add(hour);
+                }
+            });
+            
+            // Find non-conflicted hours for this lecture
+            const nonConflictedHours = [];
+            for (let hour = lecture.StartHour; hour < lecture.EndHour; hour++) {
+                if (!conflictedHours.has(hour)) {
+                    nonConflictedHours.push(hour);
+                }
+            }
+            
+            // Create lecture blocks for non-conflicted time segments
+            if (nonConflictedHours.length > 0) {
+                const segments = getConsecutiveSegments(nonConflictedHours);
+                segments.forEach(segment => {
+                    createLectureSegment(lecture, segment.start, segment.end);
+                });
+            }
+            
+            // Create conflict boxes for conflicted hours (only once per unique conflict set)
+            const processedConflictHours = new Set();
+            
+            conflictedHours.forEach(hour => {
+                if (!processedConflictHours.has(hour)) {
+                    const cellId = `cell_${lecture.Day}_${hour}`;
+                    const cell = document.getElementById(cellId);
+                    
+                    // Check if conflict box already exists for this hour
+                    if (cell && !cell.querySelector('.conflict-box')) {
+                        // Find all lectures that conflict at this specific hour
+                        const conflictingLectures = [lecture];
+                        conflicts.forEach(c => {
+                            if (hour >= c.StartHour && hour < c.EndHour) {
+                                conflictingLectures.push(c);
+                            }
+                        });
+                        
+                        // Find consecutive conflicted hours for this conflict set
+                        const conflictSegmentHours = [];
+                        for (let h = hour; h < 24; h++) {
+                            if (conflictedHours.has(h)) {
+                                conflictSegmentHours.push(h);
+                                processedConflictHours.add(h);
+                            } else {
+                                break;
+                            }
+                        }
+                        
+                        createConflictBox(lecture.Day, conflictSegmentHours[0], conflictSegmentHours[conflictSegmentHours.length-1] + 1, conflictingLectures);
+                    }
+                }
+            });
+        }
+        
+        // Get consecutive segments from array of hours
+        function getConsecutiveSegments(hours) {
+            if (hours.length === 0) return [];
+            
+            hours.sort((a, b) => a - b);
+            const segments = [];
+            let segmentStart = hours[0];
+            let segmentEnd = hours[0] + 1;
+            
+            for (let i = 1; i < hours.length; i++) {
+                if (hours[i] === hours[i-1] + 1) {
+                    segmentEnd = hours[i] + 1;
+                } else {
+                    segments.push({ start: segmentStart, end: segmentEnd });
+                    segmentStart = hours[i];
+                    segmentEnd = hours[i] + 1;
+                }
+            }
+            
+            segments.push({ start: segmentStart, end: segmentEnd });
+            return segments;
+        }
+        
+        // Create lecture segment for specific time range
+        function createLectureSegment(lecture, startHour, endHour) {
+            const lectureColor = getLectureColor(lecture.Code);
+            const duration = endHour - startHour;
+            const cellHeight = 60;
+            const blockHeight = (duration * cellHeight) - 4;
+            
+            const firstCellId = `cell_${lecture.Day}_${startHour}`;
+            const firstCell = document.getElementById(firstCellId);
+            
+            if (firstCell) {
+                const lectureBlock = document.createElement('div');
+                lectureBlock.className = 'lecture-block multi-row';
+                lectureBlock.style.cssText = `
+                    height: ${blockHeight}px;
+                    background: ${lectureColor.bg};
+                    color: ${lectureColor.text};
+                    border-radius: 8px;
+                    padding: 12px 8px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                    text-align: center;
+                    position: absolute;
+                    width: 100%;
+                    left: 0;
+                    z-index: 10;
+                `;
+                
+                lectureBlock.innerHTML = `
+                    <div style="font-size: ${duration >= 3 ? '14px' : '12px'}; font-weight: bold; margin-bottom: 4px;">${lecture.Code}</div>
+                    <div style="font-size: ${duration >= 3 ? '12px' : '10px'}; opacity: 0.9; margin-bottom: 4px;">Sec ${lecture.Section}</div>
+                    <div style="font-size: ${duration >= 3 ? '11px' : '9px'}; opacity: 0.8; margin-bottom: 3px;">${lecture.Lecturer || 'TBA'}</div>
+                    <div style="font-size: ${duration >= 3 ? '10px' : '8px'}; opacity: 0.7; margin-bottom: 3px;">${lecture.Room || 'TBA'}</div>
+                    <div style="font-size: ${duration >= 3 ? '10px' : '8px'}; opacity: 0.7; margin-top: 4px;">${startHour}:00-${endHour}:00</div>
+                `;
+                
+                firstCell.appendChild(lectureBlock);
+                
+                // Mark subsequent cells as occupied
+                for (let hour = startHour + 1; hour < endHour; hour++) {
+                    const cellId = `cell_${lecture.Day}_${hour}`;
+                    const cell = document.getElementById(cellId);
+                    if (cell) {
+                        cell.style.pointerEvents = 'none';
+                        cell.classList.add('occupied-continuation');
+                    }
+                }
+            }
+        }
+        
+        // Create conflict box showing conflicted lectures
+        function createConflictBox(day, startHour, endHour, conflictingLectures) {
+            const duration = endHour - startHour;
+            const cellHeight = 60;
+            const blockHeight = (duration * cellHeight) - 4;
+            
+            const firstCellId = `cell_${day}_${startHour}`;
+            const firstCell = document.getElementById(firstCellId);
+            
+            if (firstCell) {
+                const conflictBlock = document.createElement('div');
+                conflictBlock.className = 'lecture-block multi-row conflict-box';
+                conflictBlock.style.cssText = `
+                    height: ${blockHeight}px;
+                    background: linear-gradient(135deg, #dc3545, #c82333);
+                    color: white;
+                    border: 2px solid #dc3545;
+                    border-radius: 8px;
+                    padding: 12px 8px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                    text-align: center;
+                    position: absolute;
+                    width: 100%;
+                    left: 0;
+                    z-index: 20;
+                    animation: conflictPulse 2s infinite;
+                `;
+                
+                const lectureCodes = conflictingLectures.map(l => l.Code).join(' & ');
+                
+                conflictBlock.innerHTML = `
+                    <div style="font-size: ${duration >= 2 ? '14px' : '12px'}; font-weight: bold; margin-bottom: 6px;">⚠️ CONFLICT</div>
+                    <div style="font-size: ${duration >= 2 ? '12px' : '10px'}; opacity: 0.9; margin-bottom: 4px;">${lectureCodes}</div>
+                    <div style="font-size: ${duration >= 2 ? '10px' : '8px'}; opacity: 0.8; margin-top: 4px;">${startHour}:00-${endHour}:00</div>
+                `;
+                
+                firstCell.appendChild(conflictBlock);
                 
                 // Mark subsequent cells as occupied
                 for (let hour = startHour + 1; hour < endHour; hour++) {
