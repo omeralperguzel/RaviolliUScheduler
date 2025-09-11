@@ -442,7 +442,14 @@
             <div class="right-column">
                 <!-- Selected Lectures -->
                 <div class="selected-lectures-container">
-                    <h3>Selected Lectures:</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="margin: 0;">Selected Lectures:</h3>
+                        <button id="minimizeSelectedButton" onclick="toggleSelectedLecturesVisibility()" 
+                                style="background: #6c757d; color: white; border: none; border-radius: 6px; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; transition: all 0.2s ease;"
+                                onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">
+                            ▲
+                        </button>
+                    </div>
                     <div id="selectedLectures" style="min-height: 50px;">
                         <p style="color: #666; margin: 0;">No lectures selected yet.</p>
                     </div>
@@ -494,6 +501,9 @@
         let validCombinations = [];
         let currentCombinationIndex = 0;
         let lockedTimeSlots = new Set(); // Format: "Day_Hour" (e.g., "Monday_10")
+        let lecturerPreferences = {}; // Object to store preferred lecturers for each lecture code
+        let sectionPreferences = {}; // Object to store preferred sections for each lecture code
+        let lectureColors = {}; // Object to store assigned colors for each lecture code
         
         // Simple time structure - each hour from 9 to 19
         const timeHours = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
@@ -531,6 +541,46 @@
             });
             
             return processedLectures;
+        }
+        
+        // Color generation and assignment functions
+        function generateRandomColor() {
+            const colors = [
+                { bg: 'linear-gradient(135deg, #667eea, #764ba2)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #f093fb, #f5576c)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #4facfe, #00f2fe)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #43e97b, #38f9d7)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #fa709a, #fee140)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #ff9a9e, #fecfef)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #a18cd1, #fbc2eb)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #ffecd2, #fcb69f)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #ff8a80, #ff5722)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #81c784, #4caf50)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #64b5f6, #2196f3)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #ba68c8, #9c27b0)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #ffb74d, #ff9800)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #4db6ac, #009688)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #f06292, #e91e63)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #aed581, #8bc34a)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #90a4ae, #607d8b)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #ffcc02, #ffc107)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #26c6da, #00bcd4)', text: 'white' },
+                { bg: 'linear-gradient(135deg, #ab47bc, #8e24aa)', text: 'white' }
+            ];
+            
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+        
+        function assignLectureColor(lectureCode) {
+            if (!lectureColors[lectureCode]) {
+                lectureColors[lectureCode] = generateRandomColor();
+                console.log(`Assigned color to ${lectureCode}:`, lectureColors[lectureCode]);
+            }
+            return lectureColors[lectureCode];
+        }
+        
+        function getLectureColor(lectureCode) {
+            return lectureColors[lectureCode] || { bg: 'linear-gradient(135deg, #667eea, #764ba2)', text: 'white' };
         }
         
         // Day name mapping
@@ -769,11 +819,248 @@
             
             if (existingIndex > -1) {
                 selectedLectures.splice(existingIndex, 1);
+                // Remove both lecturer and section preferences when lecture is deselected
+                delete lecturerPreferences[lectureCode];
+                delete sectionPreferences[lectureCode];
+                // Remove color assignment when lecture is deselected
+                delete lectureColors[lectureCode];
             } else {
                 // Add the first occurrence (we'll show all sections in combinations)
                 selectedLectures.push(lecturesWithCode[0]);
+                // Assign a random color to the newly selected lecture
+                assignLectureColor(lectureCode);
             }
             
+            updateSelectedLecturesDisplay();
+            generateTimetableCombinations();
+        }
+        
+        // Update lecturer preference for a specific lecture
+        function updateLecturerPreference(lectureCode, preferredLecturer) {
+            console.log(`Updating lecturer preference for ${lectureCode} to ${preferredLecturer}`);
+            
+            if (preferredLecturer === 'any') {
+                delete lecturerPreferences[lectureCode];
+            } else {
+                lecturerPreferences[lectureCode] = preferredLecturer;
+            }
+            
+            // Regenerate combinations if we have selected lectures
+            if (selectedLectures.length > 0) {
+                generateTimetableCombinations();
+            }
+        }
+        
+        // Open lecture filter popup
+        function openLectureFilterPopup(lectureCode) {
+            const lecture = selectedLectures.find(l => l.Code === lectureCode);
+            if (!lecture) return;
+            
+            // Get all sections for this lecture with their details
+            const sections = {};
+            allLectures.forEach(l => {
+                if (l.Code === lectureCode) {
+                    if (!sections[l.Section]) {
+                        sections[l.Section] = {
+                            section: l.Section,
+                            lecturer: l.Lecturer || 'TBA',
+                            excelTime: l.ExcelTime,
+                            timeSlots: []
+                        };
+                    }
+                    sections[l.Section].timeSlots.push({
+                        day: l.Day,
+                        startHour: l.StartHour,
+                        endHour: l.EndHour
+                    });
+                }
+            });
+            
+            const sectionList = Object.values(sections);
+            const allLecturers = [...new Set(sectionList.map(s => s.lecturer).filter(l => l && l !== 'TBA'))];
+            
+            const currentLecturerPref = lecturerPreferences[lectureCode] || [];
+            const currentSectionPref = sectionPreferences[lectureCode] || [];
+            
+            // Create popup HTML
+            const popupHTML = `
+                <div id="lectureFilterOverlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;" onclick="closeLectureFilterPopup()">
+                    <div style="background: white; border-radius: 12px; padding: 24px; max-width: 600px; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3);" onclick="event.stopPropagation()">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="margin: 0; color: #333;">🎯 Filter: ${lectureCode} - ${lecture.Name}</h3>
+                            <button onclick="closeLectureFilterPopup()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">×</button>
+                        </div>
+                        
+                        <!-- Lecturer Filter Section -->
+                        <div style="margin-bottom: 24px;">
+                            <h4 style="margin: 0 0 12px 0; color: #495057;">Select Lecturers:</h4>
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+                                ${allLecturers.map(lecturer => `
+                                    <label style="display: flex; align-items: center; background: #f8f9fa; padding: 8px 12px; border-radius: 20px; cursor: pointer; transition: all 0.2s; border: 1px solid #dee2e6;" 
+                                           onmouseover="this.style.backgroundColor='#e9ecef'" onmouseout="this.style.backgroundColor='#f8f9fa'">
+                                        <input type="checkbox" value="${lecturer}" ${currentLecturerPref.includes(lecturer) ? 'checked' : ''} 
+                                               onchange="toggleLecturerFilter('${lectureCode}', '${lecturer}', this.checked)" 
+                                               style="margin-right: 8px;">
+                                        <span style="font-size: 13px;">${lecturer}</span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                            <button onclick="selectAllLecturers('${lectureCode}')" style="font-size: 12px; padding: 4px 8px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px;">Select All</button>
+                            <button onclick="clearAllLecturers('${lectureCode}')" style="font-size: 12px; padding: 4px 8px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Clear All</button>
+                        </div>
+                        
+                        <!-- Section Filter Section -->
+                        <div style="margin-bottom: 24px;">
+                            <h4 style="margin: 0 0 12px 0; color: #495057;">Select Sections:</h4>
+                            <div style="display: grid; gap: 12px;">
+                                ${sectionList.map(section => `
+                                    <label style="display: flex; align-items: flex-start; background: #f8f9fa; padding: 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s; border: 1px solid #dee2e6;" 
+                                           onmouseover="this.style.backgroundColor='#e9ecef'" onmouseout="this.style.backgroundColor='#f8f9fa'">
+                                        <input type="checkbox" value="${section.section}" ${currentSectionPref.includes(section.section) ? 'checked' : ''} 
+                                               onchange="toggleSectionFilter('${lectureCode}', '${section.section}', this.checked)" 
+                                               style="margin-right: 12px; margin-top: 2px;">
+                                        <div style="flex: 1;">
+                                            <div style="font-weight: bold; color: #007bff; margin-bottom: 4px;">Section ${section.section}</div>
+                                            <div style="font-size: 13px; color: #666; margin-bottom: 4px;">Lecturer: ${section.lecturer}</div>
+                                            <div style="font-size: 12px; color: #666; margin-bottom: 4px;">Schedule: ${section.excelTime}</div>
+                                            <div style="font-size: 11px; color: #28a745;">
+                                                ${section.timeSlots.map(slot => `${slot.day} ${slot.startHour}:00-${slot.endHour}:00`).join(' | ')}
+                                            </div>
+                                        </div>
+                                    </label>
+                                `).join('')}
+                            </div>
+                            <div style="margin-top: 12px;">
+                                <button onclick="selectAllSections('${lectureCode}')" style="font-size: 12px; padding: 4px 8px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px;">Select All</button>
+                                <button onclick="clearAllSections('${lectureCode}')" style="font-size: 12px; padding: 4px 8px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Clear All</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div style="display: flex; justify-content: flex-end; gap: 12px; padding-top: 12px; border-top: 1px solid #dee2e6;">
+                            <button onclick="clearAllFilters('${lectureCode}')" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer;">Clear All Filters</button>
+                            <button onclick="applyFiltersAndClose('${lectureCode}')" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer;">Apply Filters</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Add popup to DOM
+            document.body.insertAdjacentHTML('beforeend', popupHTML);
+        }
+        
+        // Close lecture filter popup
+        function closeLectureFilterPopup() {
+            const overlay = document.getElementById('lectureFilterOverlay');
+            if (overlay) {
+                overlay.remove();
+            }
+        }
+        
+        // Toggle lecturer filter
+        function toggleLecturerFilter(lectureCode, lecturer, isChecked) {
+            if (!lecturerPreferences[lectureCode]) {
+                lecturerPreferences[lectureCode] = [];
+            }
+            
+            if (isChecked) {
+                if (!lecturerPreferences[lectureCode].includes(lecturer)) {
+                    lecturerPreferences[lectureCode].push(lecturer);
+                }
+            } else {
+                lecturerPreferences[lectureCode] = lecturerPreferences[lectureCode].filter(l => l !== lecturer);
+                if (lecturerPreferences[lectureCode].length === 0) {
+                    delete lecturerPreferences[lectureCode];
+                }
+            }
+        }
+        
+        // Toggle section filter
+        function toggleSectionFilter(lectureCode, section, isChecked) {
+            if (!sectionPreferences[lectureCode]) {
+                sectionPreferences[lectureCode] = [];
+            }
+            
+            if (isChecked) {
+                if (!sectionPreferences[lectureCode].includes(section)) {
+                    sectionPreferences[lectureCode].push(section);
+                }
+            } else {
+                sectionPreferences[lectureCode] = sectionPreferences[lectureCode].filter(s => s !== section);
+                if (sectionPreferences[lectureCode].length === 0) {
+                    delete sectionPreferences[lectureCode];
+                }
+            }
+        }
+        
+        // Select all lecturers for a lecture
+        function selectAllLecturers(lectureCode) {
+            const checkboxes = document.querySelectorAll('#lectureFilterOverlay input[type="checkbox"][value*=""]');
+            const lecturerCheckboxes = Array.from(checkboxes).filter(cb => {
+                return allLectures.some(l => l.Code === lectureCode && l.Lecturer === cb.value);
+            });
+            
+            lecturerPreferences[lectureCode] = [];
+            lecturerCheckboxes.forEach(cb => {
+                cb.checked = true;
+                if (!lecturerPreferences[lectureCode].includes(cb.value)) {
+                    lecturerPreferences[lectureCode].push(cb.value);
+                }
+            });
+        }
+        
+        // Clear all lecturers for a lecture
+        function clearAllLecturers(lectureCode) {
+            const checkboxes = document.querySelectorAll('#lectureFilterOverlay input[type="checkbox"][value*=""]');
+            const lecturerCheckboxes = Array.from(checkboxes).filter(cb => {
+                return allLectures.some(l => l.Code === lectureCode && l.Lecturer === cb.value);
+            });
+            
+            lecturerCheckboxes.forEach(cb => cb.checked = false);
+            delete lecturerPreferences[lectureCode];
+        }
+        
+        // Select all sections for a lecture
+        function selectAllSections(lectureCode) {
+            const sections = [...new Set(allLectures.filter(l => l.Code === lectureCode).map(l => l.Section))];
+            const checkboxes = document.querySelectorAll('#lectureFilterOverlay input[type="checkbox"][value*=""]');
+            
+            sectionPreferences[lectureCode] = [];
+            checkboxes.forEach(cb => {
+                if (sections.includes(cb.value)) {
+                    cb.checked = true;
+                    if (!sectionPreferences[lectureCode].includes(cb.value)) {
+                        sectionPreferences[lectureCode].push(cb.value);
+                    }
+                }
+            });
+        }
+        
+        // Clear all sections for a lecture
+        function clearAllSections(lectureCode) {
+            const sections = [...new Set(allLectures.filter(l => l.Code === lectureCode).map(l => l.Section))];
+            const checkboxes = document.querySelectorAll('#lectureFilterOverlay input[type="checkbox"][value*=""]');
+            
+            checkboxes.forEach(cb => {
+                if (sections.includes(cb.value)) {
+                    cb.checked = false;
+                }
+            });
+            delete sectionPreferences[lectureCode];
+        }
+        
+        // Clear all filters for a lecture
+        function clearAllFilters(lectureCode) {
+            delete lecturerPreferences[lectureCode];
+            delete sectionPreferences[lectureCode];
+            
+            const checkboxes = document.querySelectorAll('#lectureFilterOverlay input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = false);
+        }
+        
+        // Apply filters and close popup
+        function applyFiltersAndClose(lectureCode) {
+            closeLectureFilterPopup();
             updateSelectedLecturesDisplay();
             generateTimetableCombinations();
         }
@@ -787,12 +1074,57 @@
                 return;
             }
             
-            container.innerHTML = selectedLectures.map(lecture => `
-                <div class="selected-lecture-tag">
-                    ${lecture.Code} - ${lecture.Name}
-                    <button onclick="toggleLectureSelection('${lecture.Code}')" class="remove-btn">×</button>
+            container.innerHTML = selectedLectures.map(lecture => {
+                // Get all available lecturers for this lecture code
+                const availableLecturers = [...new Set(
+                    allLectures
+                        .filter(l => l.Code === lecture.Code)
+                        .map(l => l.Lecturer)
+                        .filter(l => l && l.trim() !== '')
+                )];
+                
+                // Get all available sections for this lecture code
+                const availableSections = [...new Set(
+                    allLectures
+                        .filter(l => l.Code === lecture.Code)
+                        .map(l => l.Section)
+                )];
+                
+                const currentLecturerPref = lecturerPreferences[lecture.Code];
+                const currentSectionPref = sectionPreferences[lecture.Code];
+                
+                // Get the assigned color for this lecture
+                const lectureColor = getLectureColor(lecture.Code);
+                
+                // Create filter summary
+                let filterSummary = [];
+                if (currentLecturerPref && currentLecturerPref.length > 0) {
+                    filterSummary.push(`Lecturers: ${currentLecturerPref.join(', ')}`);
+                }
+                if (currentSectionPref && currentSectionPref.length > 0) {
+                    filterSummary.push(`Sections: ${currentSectionPref.join(', ')}`);
+                }
+                
+                return `
+                <div class="selected-lecture-tag" style="display: flex; flex-direction: column; gap: 8px; padding: 12px; margin: 8px 0; background: ${lectureColor.bg}; color: ${lectureColor.text}; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); cursor: pointer; transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.15);" 
+                     onclick="openLectureFilterPopup('${lecture.Code}')" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.25)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.15)';">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: bold;">${lecture.Code} - ${lecture.Name}</span>
+                        <button onclick="event.stopPropagation(); toggleLectureSelection('${lecture.Code}')" class="remove-btn" 
+                                style="background: rgba(255,255,255,0.2); color: ${lectureColor.text}; border: 1px solid rgba(255,255,255,0.3); border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-weight: bold;">×</button>
+                    </div>
+                    ${filterSummary.length > 0 ? `
+                    <div style="font-size: 11px; color: ${lectureColor.text}; background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.3);">
+                        📦 Filtered: ${filterSummary.join(' | ')}
+                    </div>
+                    ` : `
+                    <div style="font-size: 11px; color: ${lectureColor.text}; opacity: 0.9;">
+                        Click to filter sections/lecturers • ${availableSections.length} sections • ${availableLecturers.length} lecturers
+                    </div>
+                    `}
                 </div>
-            `).join('');
+                `;
+            }).join('');
         }
         
         // Generate all possible timetable combinations
@@ -811,12 +1143,28 @@
             
             combinationsContainer.style.display = 'block';
             
-            // Get all sections for each selected lecture
+            // Get all sections for each selected lecture, filtered by lecturer and section preferences
             const lectureOptions = selectedLectures.map(selected => {
                 // Get all sections for this lecture code
                 const sectionsForCode = {};
                 allLectures.forEach(lecture => {
                     if (lecture.Code === selected.Code) {
+                        // Check lecturer preference filter
+                        const preferredLecturers = lecturerPreferences[selected.Code];
+                        if (preferredLecturers && preferredLecturers.length > 0) {
+                            if (!preferredLecturers.includes(lecture.Lecturer)) {
+                                return; // Skip this lecture if lecturer not in preferred list
+                            }
+                        }
+                        
+                        // Check section preference filter
+                        const preferredSections = sectionPreferences[selected.Code];
+                        if (preferredSections && preferredSections.length > 0) {
+                            if (!preferredSections.includes(lecture.Section)) {
+                                return; // Skip this lecture if section not in preferred list
+                            }
+                        }
+                        
                         const sectionKey = lecture.Section;
                         if (!sectionsForCode[sectionKey]) {
                             sectionsForCode[sectionKey] = [];
@@ -825,9 +1173,62 @@
                     }
                 });
                 
+                const sectionsArray = Object.values(sectionsForCode);
+                
+                // Check if preferences resulted in no available sections
+                if (sectionsArray.length === 0) {
+                    const lecturerFilter = lecturerPreferences[selected.Code] ? lecturerPreferences[selected.Code].join(', ') : 'any';
+                    const sectionFilter = sectionPreferences[selected.Code] ? sectionPreferences[selected.Code].join(', ') : 'any';
+                    console.warn(`No sections available for ${selected.Code} with filters - Lecturers: ${lecturerFilter}, Sections: ${sectionFilter}`);
+                }
+                
                 // Return array of section groups (each section contains all its time slots)
-                return Object.values(sectionsForCode);
-            });
+                return sectionsArray;
+            }).filter(sections => sections.length > 0); // Filter out empty lecture options
+            
+            // Check if any lectures have no available sections due to preferences
+            if (lectureOptions.length < selectedLectures.length) {
+                const missingLectures = selectedLectures.filter((selected, index) => {
+                    const sectionsForCode = {};
+                    allLectures.forEach(lecture => {
+                        if (lecture.Code === selected.Code) {
+                            const preferredLecturers = lecturerPreferences[selected.Code];
+                            const preferredSections = sectionPreferences[selected.Code];
+                            
+                            let includeThis = true;
+                            
+                            if (preferredLecturers && preferredLecturers.length > 0) {
+                                includeThis = includeThis && preferredLecturers.includes(lecture.Lecturer);
+                            }
+                            
+                            if (preferredSections && preferredSections.length > 0) {
+                                includeThis = includeThis && preferredSections.includes(lecture.Section);
+                            }
+                            
+                            if (includeThis) {
+                                sectionsForCode[lecture.Section] = true;
+                            }
+                        }
+                    });
+                    return Object.keys(sectionsForCode).length === 0;
+                });
+                
+                if (missingLectures.length > 0) {
+                    const filterDetails = missingLectures.map(l => {
+                        const lecturerFilter = lecturerPreferences[l.Code] ? lecturerPreferences[l.Code].join(', ') : 'any';
+                        const sectionFilter = sectionPreferences[l.Code] ? sectionPreferences[l.Code].join(', ') : 'any';
+                        return `<strong>${l.Code}</strong> (Lecturers: ${lecturerFilter}, Sections: ${sectionFilter})`;
+                    }).join('<br>');
+                    
+                    container.innerHTML = `<p style="color: #dc3545; text-align: center; padding: 20px;">No sections available for the selected filters.<br>
+                        <small>The following lectures have no sections matching your preferences:<br>
+                        ${filterDetails}<br>
+                        Click on the lectures above to adjust your filters.</small></p>`;
+                    timetableControls.style.display = 'none';
+                    clearTimetable();
+                    return;
+                }
+            }
             
             // Generate all combinations
             const combinations = generateCombinations(lectureOptions);
@@ -1055,10 +1456,8 @@
             const endHour = lecture.EndHour;
             const duration = endHour - startHour;
             
-            // Get a color scheme for this lecture
-            const colorClasses = ['lecture-colors', 'lecture-colors-alt', 'lecture-colors-alt2', 'lecture-colors-alt3', 'lecture-colors-alt4'];
-            const colorIndex = Math.abs(lecture.Code.charCodeAt(0) + lecture.Code.charCodeAt(1)) % colorClasses.length;
-            const colorClass = colorClasses[colorIndex];
+            // Get the assigned color for this lecture
+            const lectureColor = getLectureColor(lecture.Code);
             
             console.log(`Placing ${lecture.Code} on ${day} from ${startHour}:00 to ${endHour}:00 (${duration} hours)`);
             
@@ -1085,7 +1484,7 @@
                 const blockHeight = (duration * cellHeight) - 4; // -4 for internal padding
                 
                 firstCell.innerHTML = `
-                    <div class="lecture-block multi-row ${colorClass}" style="height: ${blockHeight}px;">
+                    <div class="lecture-block multi-row" style="height: ${blockHeight}px; background: ${lectureColor.bg}; color: ${lectureColor.text}; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
                         <div class="lecture-code" style="font-size: ${duration >= 3 ? '14px' : '12px'}; font-weight: bold; margin-bottom: 4px;">${lecture.Code}</div>
                         <div class="lecture-section" style="font-size: ${duration >= 3 ? '12px' : '10px'}; opacity: 0.9; margin-bottom: 4px;">Sec ${lecture.Section}</div>
                         <div class="lecture-lecturer" style="font-size: ${duration >= 3 ? '11px' : '9px'}; opacity: 0.8; line-height: 1.3;">${lecture.Lecturer || 'TBA'}</div>
@@ -1216,6 +1615,25 @@
             // Regenerate combinations if lectures are already selected
             if (selectedLectures.length > 0) {
                 generateTimetableCombinations();
+            }
+        }
+
+        // Toggle Selected Lectures visibility
+        function toggleSelectedLecturesVisibility() {
+            const lecturesDiv = document.getElementById('selectedLectures');
+            const button = document.getElementById('minimizeSelectedButton');
+            const isMinimized = lecturesDiv.style.display === 'none';
+            
+            if (isMinimized) {
+                // Expand
+                lecturesDiv.style.display = 'block';
+                button.innerHTML = '▲';
+                button.title = 'Minimize Selected Lectures';
+            } else {
+                // Minimize
+                lecturesDiv.style.display = 'none';
+                button.innerHTML = '▼';
+                button.title = 'Show Selected Lectures';
             }
         }
         </script>
