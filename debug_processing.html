@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Lecture Loading</title>
+</head>
+<body>
+    <h1>Debug Lecture Processing</h1>
+    <div id="debug-output"></div>
+    
+    <script>
+        // Copy the exact same functions from the main file
+        const dayMapping = {
+            'Mo': 'Monday',
+            'Tu': 'Tuesday', 
+            'We': 'Wednesday',
+            'Th': 'Thursday',
+            'Fr': 'Friday'
+        };
+        
+        function parseExcelTime(timeString) {
+            console.log('=== parseExcelTime called ===');
+            console.log('Input timeString:', timeString);
+            
+            if (!timeString) {
+                console.log('No timeString provided, returning empty array');
+                return [];
+            }
+            
+            const timeSlots = [];
+            const patterns = timeString.match(/[A-Za-z]{2}\s+\d{1,2}\s*-\s*\d{1,2}/g);
+            console.log('Regex patterns found:', patterns);
+            
+            if (patterns) {
+                patterns.forEach(pattern => {
+                    console.log('Processing pattern:', pattern);
+                    const match = pattern.match(/([A-Za-z]{2})\s+(\d{1,2})\s*-\s*(\d{1,2})/);
+                    console.log('Match result:', match);
+                    
+                    if (match) {
+                        const [, dayAbbr, startHour, endHour] = match;
+                        const fullDay = dayMapping[dayAbbr];
+                        console.log('Extracted:', {dayAbbr, startHour, endHour, fullDay});
+                        
+                        if (fullDay) {
+                            const timeSlot = {
+                                Day: fullDay,
+                                StartHour: parseInt(startHour),
+                                EndHour: parseInt(endHour)
+                            };
+                            timeSlots.push(timeSlot);
+                            console.log('Added timeSlot:', timeSlot);
+                        } else {
+                            console.log('No fullDay found for:', dayAbbr);
+                        }
+                    } else {
+                        console.log('No match found for pattern:', pattern);
+                    }
+                });
+            } else {
+                console.log('No patterns found in timeString');
+            }
+            
+            console.log('Final timeSlots:', timeSlots);
+            console.log('=== parseExcelTime finished ===');
+            return timeSlots;
+        }
+        
+        function processLectures(rawLectures) {
+            console.log('=== processLectures called ===');
+            console.log('Input rawLectures:', rawLectures);
+            
+            const processedLectures = [];
+            
+            rawLectures.forEach((lecture, index) => {
+                console.log(`Processing lecture ${index}:`, lecture);
+                
+                const timeSlots = parseExcelTime(lecture.ExcelTime);
+                console.log('TimeSlots result:', timeSlots);
+                
+                if (timeSlots.length === 0) {
+                    console.warn('No valid time slots found for lecture:', lecture);
+                    return;
+                }
+                
+                timeSlots.forEach((timeSlot, slotIndex) => {
+                    const processedLecture = {
+                        ...lecture,
+                        Day: timeSlot.Day,
+                        StartHour: timeSlot.StartHour,
+                        EndHour: timeSlot.EndHour,
+                        TimeSlotIndex: slotIndex
+                    };
+                    processedLectures.push(processedLecture);
+                    console.log('Added processed lecture:', processedLecture);
+                });
+            });
+            
+            console.log('Final processedLectures:', processedLectures);
+            console.log('=== processLectures finished ===');
+            return processedLectures;
+        }
+        
+        // Test with the exact same sample data
+        const sampleLectures = [
+            { Code: "CS101", Name: "Introduction to Computer Science", Lecturer: "Dr. Smith", Hours: "3", Section: "01", ExcelTime: "Mo 9 - 12" },
+            { Code: "CS101", Name: "Introduction to Computer Science", Lecturer: "Dr. Smith", Hours: "3", Section: "02", ExcelTime: "Tu 14 - 17" },
+            { Code: "ENG102", Name: "English Composition", Lecturer: "Ms. Davis", Hours: "4", Section: "01", ExcelTime: "Mo 10 - 12 Th 10 - 12" }
+        ];
+        
+        console.log('Starting test with sample data...');
+        const result = processLectures(sampleLectures);
+        
+        const output = document.getElementById('debug-output');
+        output.innerHTML = `
+            <h2>Input Sample Lectures:</h2>
+            <pre>${JSON.stringify(sampleLectures, null, 2)}</pre>
+            
+            <h2>Processed Lectures:</h2>
+            <pre>${JSON.stringify(result, null, 2)}</pre>
+            
+            <h2>Check console for detailed logs</h2>
+        `;
+    </script>
+</body>
+</html>

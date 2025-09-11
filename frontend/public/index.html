@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>University Schedule Creator</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        
+        .search-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            transition: border-color 0.3s;
+            box-sizing: border-box;
+        }
+        
+        .search-input:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+        
+        .lecture-list {
+            max-height: 350px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        
+        .lecture-item {
+            margin: 8px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            transition: all 0.2s;
+        }
+        
+        .lecture-item:hover {
+            border-color: #007bff;
+            box-shadow: 0 2px 8px rgba(0,123,255,0.15);
+        }
+        
+        .selected-lectures-container {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .selected-lecture-tag {
+            display: inline-block;
+            margin: 5px;
+            padding: 8px 12px;
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+            border-radius: 20px;
+            font-size: 14px;
+            box-shadow: 0 2px 4px rgba(0,123,255,0.3);
+        }
+        
+        .remove-btn {
+            margin-left: 8px;
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 16px;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+        
+        .remove-btn:hover {
+            background-color: rgba(255,255,255,0.2);
+        }
+        
+        .timetable {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+        <div id="root"></div>
+        <main style="padding: 2rem; font-family: Arial, sans-serif;">
+            <h1 style="text-align:center;">University Schedule Creator</h1>
+            
+            <!-- Search and Lecture Selection Section -->
+            <div class="search-container">
+                <h2>Search and Select Lectures</h2>
+                <div style="margin-bottom: 1rem;">
+                    <input type="text" id="lectureSearch" placeholder="Search for lectures, codes, or lecturers..." 
+                           class="search-input">
+                </div>
+                
+                <div id="lectureList" class="lecture-list" style="padding: 10px;">
+                    <div id="loadingMessage" style="text-align: center; color: #666;">Loading lectures...</div>
+                    <div id="lectureResults"></div>
+                </div>
+            </div>
+            
+            <div class="selected-lectures-container">
+                <h3>Selected Lectures:</h3>
+                <div id="selectedLectures" style="min-height: 50px;">
+                    <p style="color: #666; margin: 0;">No lectures selected yet.</p>
+                </div>
+            </div>
+            
+            <div id="timetableCombinations" class="selected-lectures-container" style="margin-top: 20px; display: none;">
+                <h3>Possible Timetable Combinations:</h3>
+                <div id="combinationsContainer" style="max-height: 400px; overflow-y: auto;">
+                </div>
+            </div>
+            
+            <h2 style="text-align:center;">Weekly Timetable</h2>
+            
+            <div id="timetableControls" style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: none;">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <label style="font-weight: bold; margin-right: 10px;">Timetable Combination:</label>
+                        <select id="combinationSelector" onchange="displayCombinationInTimetable()" style="padding: 8px; border: 2px solid #e0e0e0; border-radius: 5px; background: white;">
+                            <option value="">Select a combination...</option>
+                        </select>
+                    </div>
+                    <div style="color: #666; font-size: 14px;">
+                        <span id="combinationInfo"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <table border="1" cellspacing="0" cellpadding="8" class="timetable" style="width:100%; border-collapse:collapse; text-align:center;" id="weeklyTimetable">
+                <thead style="background:#f0f0f0;">
+                    <tr>
+                        <th>Time</th>
+                        <th>Monday</th>
+                        <th>Tuesday</th>
+                        <th>Wednesday</th>
+                        <th>Thursday</th>
+                        <th>Friday</th>
+                    </tr>
+                </thead>
+                <tbody id="timetableBody">
+                    <!-- Timetable rows will be generated dynamically -->
+                </tbody>
+            </table>
+        </main>
+        
+        <script>
+        // Lecture data and functionality
+        let allLectures = [];
+        let selectedLectures = [];
+        let validCombinations = [];
+        let currentCombinationIndex = 0;
+        
+        // Simple time structure - each hour from 9 to 19
+        const timeHours = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
+        const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+        
+        // Process lectures to parse time slots from Excel format
+        function processLectures(rawLectures) {
+            const processedLectures = [];
+            
+            rawLectures.forEach(lecture => {
+                const timeSlots = parseExcelTime(lecture.ExcelTime);
+                
+                if (timeSlots.length === 0) {
+                    console.warn('No valid time slots found for lecture:', lecture);
+                    return;
+                }
+                
+                // Create a lecture entry for each time slot
+                timeSlots.forEach((timeSlot, index) => {
+                    processedLectures.push({
+                        ...lecture,
+                        Day: timeSlot.Day,
+                        StartHour: timeSlot.StartHour,
+                        EndHour: timeSlot.EndHour,
+                        TimeSlotIndex: index // To track multiple slots for same lecture
+                    });
+                });
+            });
+            
+            return processedLectures;
+        }
+        
+        // Day name mapping
+        const dayMapping = {
+            'Mo': 'Monday',
+            'Tu': 'Tuesday', 
+            'We': 'Wednesday',
+            'Th': 'Thursday',
+            'Fr': 'Friday'
+        };
+        
+        // Parse Excel time format like "Fr 13 - 16" or "Tu/Fr 09 - 12 Tu/Fr 13 - 15"
+        function parseExcelTime(timeString) {
+            if (!timeString) return [];
+            
+            const timeSlots = [];
+            
+            // Handle complex patterns like "Tu/Fr 09 - 12 Tu/Fr 13 - 15"
+            // First, split by multiple consecutive spaces to separate different time blocks
+            let timeBlocks = timeString.split(/\s{2,}/).filter(block => block.trim());
+            
+            // If no multiple spaces found, treat as single block
+            if (timeBlocks.length <= 1) {
+                timeBlocks = [timeString];
+            }
+            
+            timeBlocks.forEach(block => {
+                // Handle patterns like "Tu/Fr 09 - 12" (multiple days with same time)
+                const dayTimeMatch = block.match(/([A-Za-z]{2}(?:\/[A-Za-z]{2})*)\s+(\d{1,2})\s*-\s*(\d{1,2})/);
+                
+                if (dayTimeMatch) {
+                    const [, dayPart, startHour, endHour] = dayTimeMatch;
+                    const days = dayPart.split('/'); // Split multiple days like "Tu/Fr"
+                    
+                    days.forEach(dayAbbr => {
+                        const fullDay = dayMapping[dayAbbr.trim()];
+                        if (fullDay) {
+                            timeSlots.push({
+                                Day: fullDay,
+                                StartHour: parseInt(startHour),
+                                EndHour: parseInt(endHour)
+                            });
+                        }
+                    });
+                } else {
+                    // Handle simple patterns like "Mo 11 - 13" or multiple separate day-time pairs
+                    const simplePatterns = block.match(/[A-Za-z]{2}\s+\d{1,2}\s*-\s*\d{1,2}/g);
+                    
+                    if (simplePatterns) {
+                        simplePatterns.forEach(pattern => {
+                            const match = pattern.match(/([A-Za-z]{2})\s+(\d{1,2})\s*-\s*(\d{1,2})/);
+                            if (match) {
+                                const [, dayAbbr, startHour, endHour] = match;
+                                const fullDay = dayMapping[dayAbbr];
+                                if (fullDay) {
+                                    timeSlots.push({
+                                        Day: fullDay,
+                                        StartHour: parseInt(startHour),
+                                        EndHour: parseInt(endHour)
+                                    });
+                                }
+                            }
+                        });
+                    }
+                }
+            });
+            
+            return timeSlots;
+        }
+        
+        // Sample lecture data with Excel-like time format (matching real Excel structure)
+        const sampleLectures = [
+            { Code: "ADA 403", Name: "Exploratory Data Analysis", Lecturer: "", Hours: "3", Section: "01", ExcelTime: "Fr 13 - 16" },
+            { Code: "ADA 423", Name: "Statistical Inference Methods with Applications", Lecturer: "Şafak Özden", Hours: "3", Section: "01", ExcelTime: "Th 11 - 14" },
+            { Code: "ARCH 101", Name: "Basics of Design", Lecturer: "Gökhan Kınayoğlu", Hours: "6", Section: "01", ExcelTime: "Tu/Fr 13 - 15 Tu/Fr 09 - 12" },
+            { Code: "ARCH 111", Name: "Architectural Communication Techniques I", Lecturer: "Başak Uçar Kırmızıgöl", Hours: "3", Section: "01", ExcelTime: "Th 09 - 13" },
+            { Code: "ARCH 121", Name: "Introduction to Architecture", Lecturer: "Bilge İmamoğlu", Hours: "3", Section: "01", ExcelTime: "We 09 - 12" },
+            { Code: "ARCH 201", Name: "Architectural Design I", Lecturer: "Zuhal Acar Metin", Hours: "6", Section: "01", ExcelTime: "Tu/Fr 09 - 12 Tu/Fr 13 - 15" },
+            { Code: "ARCH 301", Name: "Architectural Design III", Lecturer: "Azize Elif Yabacı", Hours: "6", Section: "01", ExcelTime: "Tu/Fr 09 - 12 Tu/Fr 13 - 15" },
+            { Code: "ARCH 301-O", Name: "Architectural Design III", Lecturer: "Gültekin Doruk Atay", Hours: "6", Section: "01", ExcelTime: "Tu/Fr 13 - 15 Tu/Fr 09 - 12" },
+            { Code: "ARCH 381", Name: "Urban Design", Lecturer: "Seray Türkay Coşkun", Hours: "3", Section: "01", ExcelTime: "Mo 09 - 13" },
+            { Code: "BA 305", Name: "Production and Operations Management", Lecturer: "Hakan Bütüner", Hours: "3", Section: "01", ExcelTime: "Mo 12 - 15 Th 17 - 18" },
+            { Code: "CE 214", Name: "Introduction to Mechanics of Materials", Lecturer: "Rıza Secer Orkun Keskin", Hours: "4", Section: "01", ExcelTime: "Tu 14 - 16 We 14 - 15 Fr 15 - 17" },
+            { Code: "CE 331", Name: "Hydromechanics", Lecturer: "Aslı Numanoğlu Genç", Hours: "4", Section: "01", ExcelTime: "We 15 - 16 Th 12 - 14 Fr 13 - 15" }
+        ];
+        
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeTimetable();
+            loadLectures();
+            setupSearchFunctionality();
+        });
+        
+        // Initialize empty timetable
+        function initializeTimetable() {
+            const tbody = document.getElementById('timetableBody');
+            
+            // Create rows for each hour
+            tbody.innerHTML = timeHours.map(hour => {
+                const nextHour = hour + 1;
+                const timeLabel = `${hour.toString().padStart(2, '0')}:00 - ${nextHour.toString().padStart(2, '0')}:00`;
+                
+                return `
+                    <tr>
+                        <td style="background: #f8f9fa; font-weight: bold; width: 120px;">${timeLabel}</td>
+                        ${days.map(day => 
+                            `<td id="cell_${day}_${hour}" style="height: 50px; width: 150px; border: 1px solid #ddd; position: relative; vertical-align: top;"></td>`
+                        ).join('')}
+                    </tr>
+                `;
+            }).join('');
+            
+            console.log('Timetable initialized with cells for hours:', timeHours);
+        }
+        
+        // Load lectures from API or use sample data
+        async function loadLectures() {
+            try {
+                const response = await fetch('http://localhost:5000/api/lectures');
+                if (response.ok) {
+                    const rawLectures = await response.json();
+                    allLectures = processLectures(rawLectures);
+                } else {
+                    throw new Error('API not available');
+                }
+            } catch (error) {
+                console.log('Using sample data - API not available');
+                allLectures = processLectures(sampleLectures);
+            }
+            
+            console.log('Processed lectures:', allLectures);
+            document.getElementById('loadingMessage').style.display = 'none';
+            displayLectures(allLectures);
+        }
+        
+        // Setup search functionality
+        function setupSearchFunctionality() {
+            const searchInput = document.getElementById('lectureSearch');
+            searchInput.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                const filteredLectures = allLectures.filter(lecture => 
+                    lecture.Code.toLowerCase().includes(searchTerm) ||
+                    lecture.Name.toLowerCase().includes(searchTerm) ||
+                    lecture.Lecturer.toLowerCase().includes(searchTerm)
+                );
+                displayLectures(filteredLectures);
+            });
+        }
+        
+        // Display lectures in the list
+        function displayLectures(lectures) {
+            const resultsContainer = document.getElementById('lectureResults');
+            
+            if (lectures.length === 0) {
+                resultsContainer.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No lectures found.</p>';
+                return;
+            }
+            
+            // Group lectures by code and name only (merge all sections)
+            const lecturesByCode = {};
+            lectures.forEach(lecture => {
+                const key = lecture.Code; // Group by code only
+                if (!lecturesByCode[key]) {
+                    lecturesByCode[key] = {
+                        Code: lecture.Code,
+                        Name: lecture.Name,
+                        Hours: lecture.Hours,
+                        sections: []
+                    };
+                }
+                
+                // Find or create section within this lecture
+                let existingSection = lecturesByCode[key].sections.find(s => s.Section === lecture.Section);
+                if (!existingSection) {
+                    existingSection = {
+                        Section: lecture.Section,
+                        Lecturer: lecture.Lecturer,
+                        ExcelTime: lecture.ExcelTime,
+                        timeSlots: []
+                    };
+                    lecturesByCode[key].sections.push(existingSection);
+                }
+                
+                // Add time slot to section
+                existingSection.timeSlots.push({
+                    Day: lecture.Day,
+                    StartHour: lecture.StartHour,
+                    EndHour: lecture.EndHour
+                });
+            });
+            
+            resultsContainer.innerHTML = Object.values(lecturesByCode).map(lecture => `
+                <div class="lecture-item">
+                    <label style="display: flex; align-items: flex-start; cursor: pointer;">
+                        <input type="checkbox" value="${lecture.Code}" onchange="toggleLectureSelection('${lecture.Code}')" 
+                               style="margin-right: 15px; margin-top: 5px; transform: scale(1.3);"
+                               ${selectedLectures.some(selected => selected.Code === lecture.Code) ? 'checked' : ''}>
+                        <div style="flex: 1;">
+                            <div><strong style="color: #007bff; font-size: 16px;">${lecture.Code}</strong> - ${lecture.Name}</div>
+                            <div style="color: #666; margin: 8px 0;">Hours: ${lecture.Hours}</div>
+                            <div style="margin-top: 10px;">
+                                <strong style="color: #333; font-size: 14px;">Available Sections:</strong>
+                                <div style="margin-top: 5px;">
+                                    ${lecture.sections.map(section => `
+                                        <div style="background: #f8f9fa; padding: 8px; margin: 4px 0; border-radius: 5px; border-left: 3px solid #007bff;">
+                                            <span style="font-weight: bold;">Section ${section.Section}</span> - ${section.Lecturer}<br>
+                                            <span style="color: #666; font-size: 12px;">Excel Time: ${section.ExcelTime}</span><br>
+                                            ${section.timeSlots.map(slot => 
+                                                `<span style="color: #28a745; font-weight: bold; display: inline-block; margin-right: 10px;">${slot.Day} ${slot.StartHour}:00-${slot.EndHour}:00</span>`
+                                            ).join('')}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            `).join('');
+        }
+        
+        // Toggle lecture selection
+        function toggleLectureSelection(lectureCode) {
+            const lecturesWithCode = allLectures.filter(l => l.Code === lectureCode);
+            const existingIndex = selectedLectures.findIndex(l => l.Code === lectureCode);
+            
+            if (existingIndex > -1) {
+                selectedLectures.splice(existingIndex, 1);
+            } else {
+                // Add the first occurrence (we'll show all sections in combinations)
+                selectedLectures.push(lecturesWithCode[0]);
+            }
+            
+            updateSelectedLecturesDisplay();
+            generateTimetableCombinations();
+        }
+        
+        // Update selected lectures display
+        function updateSelectedLecturesDisplay() {
+            const container = document.getElementById('selectedLectures');
+            
+            if (selectedLectures.length === 0) {
+                container.innerHTML = '<p style="color: #666; margin: 0;">No lectures selected yet.</p>';
+                return;
+            }
+            
+            container.innerHTML = selectedLectures.map(lecture => `
+                <div class="selected-lecture-tag">
+                    ${lecture.Code} - ${lecture.Name}
+                    <button onclick="toggleLectureSelection('${lecture.Code}')" class="remove-btn">×</button>
+                </div>
+            `).join('');
+        }
+        
+        // Generate all possible timetable combinations
+        function generateTimetableCombinations() {
+            const combinationsContainer = document.getElementById('timetableCombinations');
+            const container = document.getElementById('combinationsContainer');
+            const timetableControls = document.getElementById('timetableControls');
+            
+            if (selectedLectures.length === 0) {
+                combinationsContainer.style.display = 'none';
+                timetableControls.style.display = 'none';
+                validCombinations = [];
+                clearTimetable();
+                return;
+            }
+            
+            combinationsContainer.style.display = 'block';
+            
+            // Get all sections for each selected lecture
+            const lectureOptions = selectedLectures.map(selected => {
+                // Get all sections for this lecture code
+                const sectionsForCode = {};
+                allLectures.forEach(lecture => {
+                    if (lecture.Code === selected.Code) {
+                        const sectionKey = lecture.Section;
+                        if (!sectionsForCode[sectionKey]) {
+                            sectionsForCode[sectionKey] = [];
+                        }
+                        sectionsForCode[sectionKey].push(lecture);
+                    }
+                });
+                
+                // Return array of section groups (each section contains all its time slots)
+                return Object.values(sectionsForCode);
+            });
+            
+            // Generate all combinations
+            const combinations = generateCombinations(lectureOptions);
+            
+            // Filter out combinations with time conflicts
+            validCombinations = combinations.filter(combination => !hasTimeConflict(combination));
+            
+            if (validCombinations.length === 0) {
+                container.innerHTML = '<p style="color: #dc3545; text-align: center; padding: 20px;">No valid combinations found. Selected lectures have conflicting time slots.</p>';
+                timetableControls.style.display = 'none';
+                clearTimetable();
+                return;
+            }
+            
+            // Show timetable controls
+            timetableControls.style.display = 'block';
+            populateCombinationSelector();
+            
+            // Display combinations list
+            container.innerHTML = validCombinations.map((combination, index) => `
+                <div style="margin-bottom: 20px; padding: 15px; border: 2px solid #e0e0e0; border-radius: 10px; background: white;">
+                    <h4 style="margin: 0 0 15px 0; color: #007bff;">Combination ${index + 1}</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px;">
+                        ${combination.map(lectureGroup => {
+                            const firstLecture = lectureGroup[0];
+                            return `
+                                <div style="padding: 10px; background: #f8f9fa; border-radius: 5px; border-left: 4px solid #28a745;">
+                                    <div style="font-weight: bold; color: #007bff;">${firstLecture.Code} - Section ${firstLecture.Section}</div>
+                                    <div style="color: #666; font-size: 14px;">${firstLecture.Name}</div>
+                                    <div style="color: #333; margin-top: 5px;">${firstLecture.Lecturer}</div>
+                                    <div style="color: #666; font-size: 12px; margin-top: 3px;">Excel: ${firstLecture.ExcelTime}</div>
+                                    ${lectureGroup.map(lecture => 
+                                        `<div style="color: #28a745; font-weight: bold; margin-top: 3px; font-size: 12px;">${lecture.Day} ${lecture.StartHour}:00-${lecture.EndHour}:00</div>`
+                                    ).join('')}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    <button onclick="selectCombinationInDropdown(${index})" style="margin-top: 15px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        Show in Timetable
+                    </button>
+                </div>
+            `).join('');
+            
+            // Auto-select first combination if available
+            if (validCombinations.length > 0) {
+                currentCombinationIndex = 0;
+                displayCombinationInTimetable();
+            }
+        }
+        
+        // Populate the combination selector dropdown
+        function populateCombinationSelector() {
+            const selector = document.getElementById('combinationSelector');
+            const info = document.getElementById('combinationInfo');
+            
+            selector.innerHTML = '<option value="">Select a combination...</option>' +
+                validCombinations.map((combination, index) => 
+                    `<option value="${index}">Combination ${index + 1} (${combination.length} lectures)</option>`
+                ).join('');
+            
+            info.textContent = `${validCombinations.length} valid combination(s) found`;
+        }
+        
+        // Select combination from dropdown
+        function selectCombinationInDropdown(index) {
+            const selector = document.getElementById('combinationSelector');
+            selector.value = index;
+            currentCombinationIndex = index;
+            displayCombinationInTimetable();
+        }
+        
+        // Display selected combination in timetable
+        function displayCombinationInTimetable() {
+            const selector = document.getElementById('combinationSelector');
+            const selectedIndex = parseInt(selector.value);
+            
+            if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= validCombinations.length) {
+                clearTimetable();
+                return;
+            }
+            
+            currentCombinationIndex = selectedIndex;
+            clearTimetable();
+            
+            const combination = validCombinations[selectedIndex];
+            console.log('Displaying combination:', selectedIndex + 1, combination);
+            
+            combination.forEach(lectureGroup => {
+                console.log('Placing lecture group:', lectureGroup);
+                lectureGroup.forEach(lecture => {
+                    placeLectureInTimetable(lecture);
+                });
+            });
+        }
+        
+        // Clear the timetable - simple version
+        function clearTimetable() {
+            timeHours.forEach(hour => {
+                days.forEach(day => {
+                    const cellId = `cell_${day}_${hour}`;
+                    const cell = document.getElementById(cellId);
+                    if (cell) {
+                        cell.innerHTML = '';
+                        cell.style.background = '';
+                        cell.style.border = '1px solid #ddd';
+                    }
+                });
+            });
+            console.log('Timetable cleared');
+        }
+        
+        // Place a lecture in the correct timetable cells - completely rewritten
+        function placeLectureInTimetable(lecture) {
+            console.log('=== Placing lecture ===');
+            console.log('Lecture object:', lecture);
+            
+            if (!lecture || !lecture.Day || (!lecture.StartHour && lecture.StartHour !== 0)) {
+                console.error('Invalid lecture data:', lecture);
+                return;
+            }
+            
+            const day = lecture.Day;
+            const startHour = lecture.StartHour;
+            const endHour = lecture.EndHour;
+            
+            console.log(`Placing ${lecture.Code} on ${day} from ${startHour}:00 to ${endHour}:00`);
+            
+            // Place lecture in each hour it occupies
+            for (let hour = startHour; hour < endHour; hour++) {
+                const cellId = `cell_${day}_${hour}`;
+                console.log(`Looking for cell: ${cellId}`);
+                
+                const cell = document.getElementById(cellId);
+                if (cell) {
+                    console.log(`Found cell ${cellId}, placing lecture`);
+                    
+                    // Create lecture block
+                    const isFirstHour = (hour === startHour);
+                    
+                    if (isFirstHour) {
+                        // First hour - show full information
+                        cell.innerHTML = `
+                            <div style="
+                                background: linear-gradient(135deg, #007bff, #0056b3); 
+                                color: white; 
+                                padding: 5px; 
+                                border-radius: 4px; 
+                                font-size: 11px; 
+                                line-height: 1.3; 
+                                height: calc(100% - 10px);
+                                display: flex;
+                                flex-direction: column;
+                                justify-content: center;
+                            ">
+                                <div style="font-weight: bold; font-size: 12px;">${lecture.Code}</div>
+                                <div style="font-size: 10px;">Sec ${lecture.Section}</div>
+                                <div style="font-size: 9px; opacity: 0.9;">${lecture.Lecturer}</div>
+                            </div>
+                        `;
+                    } else {
+                        // Continuation hours - show abbreviated info
+                        cell.innerHTML = `
+                            <div style="
+                                background: linear-gradient(135deg, #0056b3, #003d82); 
+                                color: white; 
+                                padding: 5px; 
+                                border-radius: 4px; 
+                                font-size: 10px; 
+                                height: calc(100% - 10px);
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                            ">
+                                <div style="text-align: center;">
+                                    <div style="font-weight: bold;">${lecture.Code}</div>
+                                    <div style="font-size: 8px; opacity: 0.8;">(cont.)</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    // Highlight the cell
+                    cell.style.background = '#e3f2fd';
+                    cell.style.border = '2px solid #007bff';
+                    
+                } else {
+                    console.error(`Cell not found: ${cellId}`);
+                }
+            }
+            
+            console.log(`Lecture ${lecture.Code} placed successfully`);
+        }
+        
+        // Generate all possible combinations from arrays
+        function generateCombinations(arrays) {
+            if (arrays.length === 0) return [[]];
+            if (arrays.length === 1) return arrays[0].map(item => [item]);
+            
+            const result = [];
+            const restCombinations = generateCombinations(arrays.slice(1));
+            
+            for (const item of arrays[0]) {
+                for (const combination of restCombinations) {
+                    result.push([item, ...combination]);
+                }
+            }
+            
+            return result;
+        }
+        
+        // Check if a combination has time conflicts - updated for multiple time slots
+        function hasTimeConflict(combination) {
+            // Get all time slots for all lectures in the combination
+            const allTimeSlots = [];
+            
+            combination.forEach(lectureGroup => {
+                // lectureGroup contains all time slots for a selected lecture section
+                const lectureCode = lectureGroup[0].Code;
+                const lectureSection = lectureGroup[0].Section;
+                
+                lectureGroup.forEach(lecture => {
+                    allTimeSlots.push({
+                        Code: lectureCode,
+                        Section: lectureSection,
+                        Day: lecture.Day,
+                        StartHour: lecture.StartHour,
+                        EndHour: lecture.EndHour
+                    });
+                });
+            });
+            
+            // Check for conflicts between all time slots
+            for (let i = 0; i < allTimeSlots.length; i++) {
+                for (let j = i + 1; j < allTimeSlots.length; j++) {
+                    const slot1 = allTimeSlots[i];
+                    const slot2 = allTimeSlots[j];
+                    
+                    // Skip if same lecture
+                    if (slot1.Code === slot2.Code && slot1.Section === slot2.Section) {
+                        continue;
+                    }
+                    
+                    // Check if they're on the same day
+                    if (slot1.Day === slot2.Day) {
+                        // Check if time ranges overlap
+                        const overlap = !(slot1.EndHour <= slot2.StartHour || slot2.EndHour <= slot1.StartHour);
+                        if (overlap) {
+                            console.log('Time conflict detected:', 
+                                `${slot1.Code}-${slot1.Section} vs ${slot2.Code}-${slot2.Section} on ${slot1.Day}`);
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+        
+        // Check if two time ranges overlap
+        function timeRangesOverlap(range1, range2) {
+            return range1.start < range2.end && range2.start < range1.end;
+        }
+        </script>
+</body>
+</html>

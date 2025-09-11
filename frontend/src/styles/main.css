@@ -1,0 +1,50 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+}
+
+header {
+    background: #35424a;
+    color: #ffffff;
+    padding: 10px 0;
+    text-align: center;
+}
+
+footer {
+    background: #35424a;
+    color: #ffffff;
+    text-align: center;
+    padding: 10px 0;
+    position: relative;
+    bottom: 0;
+    width: 100%;
+}
+
+.timetable {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    padding: 20px;
+}
+
+.timetable-slot {
+    background: #ffffff;
+    border: 1px solid #dddddd;
+    padding: 10px;
+    text-align: center;
+    border-radius: 5px;
+}
+
+.locked {
+    background: #ffcccc;
+}
+
+.lecture-selector {
+    margin: 20px;
+}
+
+.time-slot-locker {
+    margin: 20px;
+}

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Complex Excel Parsing</title>
+</head>
+<body>
+    <h1>Test Complex Excel Schedule Parsing</h1>
+    <div id="output"></div>
+    <script>
+        // Day mapping
+        const dayMapping = {
+            'Mo': 'Monday',
+            'Tu': 'Tuesday', 
+            'We': 'Wednesday',
+            'Th': 'Thursday',
+            'Fr': 'Friday'
+        };
+        
+        // Updated parseExcelTime function
+        function parseExcelTime(timeString) {
+            if (!timeString) return [];
+            
+            const timeSlots = [];
+            
+            // Handle complex patterns like "Tu/Fr 09 - 12 Tu/Fr 13 - 15"
+            // First, split by multiple consecutive spaces to separate different time blocks
+            const timeBlocks = timeString.split(/\s{2,}/).filter(block => block.trim());
+            
+            // If no multiple spaces found, treat as single block
+            if (timeBlocks.length <= 1) {
+                timeBlocks = [timeString];
+            }
+            
+            timeBlocks.forEach(block => {
+                // Handle patterns like "Tu/Fr 09 - 12" (multiple days with same time)
+                const dayTimeMatch = block.match(/([A-Za-z]{2}(?:\/[A-Za-z]{2})*)\s+(\d{1,2})\s*-\s*(\d{1,2})/);
+                
+                if (dayTimeMatch) {
+                    const [, dayPart, startHour, endHour] = dayTimeMatch;
+                    const days = dayPart.split('/'); // Split multiple days like "Tu/Fr"
+                    
+                    days.forEach(dayAbbr => {
+                        const fullDay = dayMapping[dayAbbr.trim()];
+                        if (fullDay) {
+                            timeSlots.push({
+                                Day: fullDay,
+                                StartHour: parseInt(startHour),
+                                EndHour: parseInt(endHour)
+                            });
+                        }
+                    });
+                } else {
+                    // Handle simple patterns like "Mo 11 - 13" or multiple separate day-time pairs
+                    const simplePatterns = block.match(/[A-Za-z]{2}\s+\d{1,2}\s*-\s*\d{1,2}/g);
+                    
+                    if (simplePatterns) {
+                        simplePatterns.forEach(pattern => {
+                            const match = pattern.match(/([A-Za-z]{2})\s+(\d{1,2})\s*-\s*(\d{1,2})/);
+                            if (match) {
+                                const [, dayAbbr, startHour, endHour] = match;
+                                const fullDay = dayMapping[dayAbbr];
+                                if (fullDay) {
+                                    timeSlots.push({
+                                        Day: fullDay,
+                                        StartHour: parseInt(startHour),
+                                        EndHour: parseInt(endHour)
+                                    });
+                                }
+                            }
+                        });
+                    }
+                }
+            });
+            
+            return timeSlots;
+        }
+        
+        // Test cases from real Excel data
+        const testCases = [
+            "Fr 13 - 16",
+            "Th 11 - 14", 
+            "Tu/Fr 13 - 15 Tu/Fr 09 - 12",
+            "Th 09 - 13",
+            "We 09 - 12",
+            "Mo 09 - 13",
+            "Mo 12 - 15 Th 17 - 18",
+            "Tu 14 - 16 We 14 - 15 Fr 15 - 17",
+            "We 15 - 16 Th 12 - 14 Fr 13 - 15"
+        ];
+        
+        const output = document.getElementById('output');
+        
+        testCases.forEach(testCase => {
+            const result = parseExcelTime(testCase);
+            output.innerHTML += `
+                <div style="margin-bottom: 20px; border: 1px solid #ddd; padding: 10px; border-radius: 5px;">
+                    <strong>Input:</strong> ${testCase}<br>
+                    <strong>Parsed:</strong> ${JSON.stringify(result, null, 2)}
+                </div>
+            `;
+        });
+    </script>
+</body>
+</html>
