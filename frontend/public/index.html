@@ -8,6 +8,8 @@
     <title>University Schedule Creator</title>
     <link rel="stylesheet" href="styles/main.css">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -460,6 +462,45 @@
                 font-size: 10px;
             }
         }
+        
+        /* Export controls styling */
+        .export-container {
+            border: 1px solid #e9ecef !important;
+        }
+        
+        .export-container button {
+            transition: all 0.2s ease;
+            font-weight: 500;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .export-container button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        
+        .export-container button:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .export-container button:disabled:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .combination-export-checkbox {
+            accent-color: #007bff;
+        }
+        
+        .combination-export-checkbox:checked {
+            background-color: #007bff;
+            border-color: #007bff;
+        }
     </style>
 </head>
 <body>
@@ -495,6 +536,18 @@
                         </div>
                         <small style="color: #6c757d;">Set to 0 for no conflicts (default), increase to allow overlapping lectures</small>
                     </div>
+                </div>
+                
+                <!-- Export Controls -->
+                <div id="exportControls" class="export-container" style="display: none; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 15px;">
+                    <h3 style="margin-top: 0; margin-bottom: 15px; color: #333; font-size: 18px;">Export Combinations</h3>
+                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px; flex-wrap: wrap;">
+                        <button onclick="selectAllCombinationsForExport()" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; transition: all 0.2s;">Select All</button>
+                        <button onclick="clearAllCombinationSelections()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; transition: all 0.2s;">Clear All</button>
+                        <button onclick="exportSelectedCombinations()" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; transition: all 0.2s;" disabled>Export Selected as PNG</button>
+                        <span id="exportStatus" style="margin-left: 10px; color: #666; font-size: 14px;"></span>
+                    </div>
+                    <div id="selectedCountDisplay" style="color: #666; font-size: 14px;">0 combinations selected for export</div>
                 </div>
                 
                 <!-- Possible Timetable Combinations -->
@@ -572,6 +625,9 @@
         let sectionPreferences = {}; // Object to store preferred sections for each lecture code
         let lectureColors = {}; // Object to store assigned colors for each lecture code
         
+        // Export functionality
+        let selectedCombinationsForExport = new Set(); // Set to track which combinations are selected for export
+        
         // Alternative course management
         let alternativeCourseGroups = {}; // Object to store alternative course groups: {groupId: [courseCode1, courseCode2]}
         let courseToAlternativeGroup = {}; // Object to map course codes to their alternative group ID
@@ -600,6 +656,9 @@
                     return;
                 }
                 
+                // Parse room assignments for each time slot
+                const roomAssignments = parseRoomAssignments(lecture.Room, timeSlots);
+                
                 // Create a lecture entry for each time slot
                 timeSlots.forEach((timeSlot, index) => {
                     processedLectures.push({
@@ -607,6 +666,7 @@
                         Day: timeSlot.Day,
                         StartHour: timeSlot.StartHour,
                         EndHour: timeSlot.EndHour,
+                        Room: roomAssignments[index] || 'TBA',
                         TimeSlotIndex: index // To track multiple slots for same lecture
                     });
                 });
@@ -664,21 +724,80 @@
             'Fr': 'Friday'
         };
         
-        // Parse Excel time format like "Fr 13 - 16" or "Tu/Fr 09 - 12 Tu/Fr 13 - 15"
+        // Parse room information to match time slots
+        function parseRoomAssignments(roomString, timeSlots) {
+            if (!roomString || !timeSlots || timeSlots.length === 0) {
+                return timeSlots.map(() => 'TBA');
+            }
+            
+            // Split rooms by spaces and filter out empty strings
+            const rooms = roomString.trim().split(/\s+/).filter(room => room.trim());
+            
+            // If we have equal number of rooms and time slots, assign directly
+            if (rooms.length === timeSlots.length) {
+                return rooms;
+            }
+            
+            // If we have only one room, assign it to all time slots
+            if (rooms.length === 1) {
+                return timeSlots.map(() => rooms[0]);
+            }
+            
+            // If we have more rooms than time slots, take the first N rooms
+            if (rooms.length > timeSlots.length) {
+                return rooms.slice(0, timeSlots.length);
+            }
+            
+            // If we have fewer rooms than time slots, repeat the last room
+            const result = [...rooms];
+            while (result.length < timeSlots.length) {
+                result.push(rooms[rooms.length - 1] || 'TBA');
+            }
+            
+            return result;
+        }
+        
+        // Parse Excel time format like "Fr 13 - 16", "Tu 13 - 16 Th 14 - 16", or "Tu/Fr 09 - 12 Tu/Fr 13 - 15"
         function parseExcelTime(timeString) {
             if (!timeString) return [];
             
             const timeSlots = [];
             
-            // Handle complex patterns like "Tu/Fr 09 - 12 Tu/Fr 13 - 15"
-            // First, split by multiple consecutive spaces to separate different time blocks
+            // Handle different patterns:
+            // 1. "Tu/Fr 09 - 12 Tu/Fr 13 - 15" (multiple days same time, multiple time blocks)
+            // 2. "Tu 13 - 16 Th 14 - 16" (different days different times)
+            // 3. "Fr 13 - 16" (single day single time)
+            
+            // First, try to split by multiple consecutive spaces to separate different time blocks
             let timeBlocks = timeString.split(/\s{2,}/).filter(block => block.trim());
             
-            // If no multiple spaces found, treat as single block
+            // If no multiple spaces found, check if it contains separate day-time patterns
             if (timeBlocks.length <= 1) {
-                timeBlocks = [timeString];
+                // Look for patterns like "Tu 13 - 16 Th 14 - 16" (single spaces)
+                const separateDayPattern = /([A-Za-z]{2})\s+(\d{1,2})\s*-\s*(\d{1,2})/g;
+                const matches = [...timeString.matchAll(separateDayPattern)];
+                
+                if (matches.length > 1) {
+                    // Multiple separate day-time pairs found
+                    matches.forEach(match => {
+                        const [, dayAbbr, startHour, endHour] = match;
+                        const fullDay = dayMapping[dayAbbr];
+                        if (fullDay) {
+                            timeSlots.push({
+                                Day: fullDay,
+                                StartHour: parseInt(startHour),
+                                EndHour: parseInt(endHour)
+                            });
+                        }
+                    });
+                    return timeSlots;
+                } else {
+                    // Single block
+                    timeBlocks = [timeString];
+                }
             }
             
+            // Process each time block
             timeBlocks.forEach(block => {
                 // Handle patterns like "Tu/Fr 09 - 12" (multiple days with same time)
                 const dayTimeMatch = block.match(/([A-Za-z]{2}(?:\/[A-Za-z]{2})*)\s+(\d{1,2})\s*-\s*(\d{1,2})/);
@@ -697,26 +816,6 @@
                             });
                         }
                     });
-                } else {
-                    // Handle simple patterns like "Mo 11 - 13" or multiple separate day-time pairs
-                    const simplePatterns = block.match(/[A-Za-z]{2}\s+\d{1,2}\s*-\s*\d{1,2}/g);
-                    
-                    if (simplePatterns) {
-                        simplePatterns.forEach(pattern => {
-                            const match = pattern.match(/([A-Za-z]{2})\s+(\d{1,2})\s*-\s*(\d{1,2})/);
-                            if (match) {
-                                const [, dayAbbr, startHour, endHour] = match;
-                                const fullDay = dayMapping[dayAbbr];
-                                if (fullDay) {
-                                    timeSlots.push({
-                                        Day: fullDay,
-                                        StartHour: parseInt(startHour),
-                                        EndHour: parseInt(endHour)
-                                    });
-                                }
-                            }
-                        });
-                    }
                 }
             });
             
@@ -725,18 +824,21 @@
         
         // Sample lecture data with Excel-like time format (matching real Excel structure)
         const sampleLectures = [
-            { Code: "ADA 403", Name: "Exploratory Data Analysis", Lecturer: "", Hours: "3", Section: "01", ExcelTime: "Fr 13 - 16" },
-            { Code: "ADA 423", Name: "Statistical Inference Methods with Applications", Lecturer: "Şafak Özden", Hours: "3", Section: "01", ExcelTime: "Th 11 - 14" },
-            { Code: "ARCH 101", Name: "Basics of Design", Lecturer: "Gökhan Kınayoğlu", Hours: "6", Section: "01", ExcelTime: "Tu/Fr 13 - 15 Tu/Fr 09 - 12" },
-            { Code: "ARCH 111", Name: "Architectural Communication Techniques I", Lecturer: "Başak Uçar Kırmızıgöl", Hours: "3", Section: "01", ExcelTime: "Th 09 - 13" },
-            { Code: "ARCH 121", Name: "Introduction to Architecture", Lecturer: "Bilge İmamoğlu", Hours: "3", Section: "01", ExcelTime: "We 09 - 12" },
-            { Code: "ARCH 201", Name: "Architectural Design I", Lecturer: "Zuhal Acar Metin", Hours: "6", Section: "01", ExcelTime: "Tu/Fr 09 - 12 Tu/Fr 13 - 15" },
-            { Code: "ARCH 301", Name: "Architectural Design III", Lecturer: "Azize Elif Yabacı", Hours: "6", Section: "01", ExcelTime: "Tu/Fr 09 - 12 Tu/Fr 13 - 15" },
-            { Code: "ARCH 301-O", Name: "Architectural Design III", Lecturer: "Gültekin Doruk Atay", Hours: "6", Section: "01", ExcelTime: "Tu/Fr 13 - 15 Tu/Fr 09 - 12" },
-            { Code: "ARCH 381", Name: "Urban Design", Lecturer: "Seray Türkay Coşkun", Hours: "3", Section: "01", ExcelTime: "Mo 09 - 13" },
-            { Code: "BA 305", Name: "Production and Operations Management", Lecturer: "Hakan Bütüner", Hours: "3", Section: "01", ExcelTime: "Mo 12 - 15 Th 17 - 18" },
-            { Code: "CE 214", Name: "Introduction to Mechanics of Materials", Lecturer: "Rıza Secer Orkun Keskin", Hours: "4", Section: "01", ExcelTime: "Tu 14 - 16 We 14 - 15 Fr 15 - 17" },
-            { Code: "CE 331", Name: "Hydromechanics", Lecturer: "Aslı Numanoğlu Genç", Hours: "4", Section: "01", ExcelTime: "We 15 - 16 Th 12 - 14 Fr 13 - 15" }
+            { Code: "ADA 403", Name: "Exploratory Data Analysis", Lecturer: "", Hours: "3", Section: "01", ExcelTime: "Fr 13 - 16", Room: "DB20" },
+            { Code: "ADA 423", Name: "Statistical Inference Methods with Applications", Lecturer: "Şafak Özden", Hours: "3", Section: "01", ExcelTime: "Th 11 - 14", Room: "DB16" },
+            { Code: "ARCH 101", Name: "Basics of Design", Lecturer: "Gökhan Kınayoğlu", Hours: "6", Section: "01", ExcelTime: "Tu/Fr 13 - 15 Tu/Fr 09 - 12", Room: "E310-MTF E310-MTF" },
+            { Code: "ARCH 111", Name: "Architectural Communication Techniques I", Lecturer: "Başak Uçar Kırmızıgöl", Hours: "3", Section: "01", ExcelTime: "Th 09 - 13", Room: "E310-MTF" },
+            { Code: "ARCH 121", Name: "Introduction to Architecture", Lecturer: "Bilge İmamoğlu", Hours: "3", Section: "01", ExcelTime: "We 09 - 12", Room: "D026" },
+            { Code: "ARCH 201", Name: "Architectural Design I", Lecturer: "Zuhal Acar Metin", Hours: "6", Section: "01", ExcelTime: "Tu/Fr 09 - 12 Tu/Fr 13 - 15", Room: "E312-MTF E312-MTF" },
+            { Code: "ARCH 301", Name: "Architectural Design III", Lecturer: "Azize Elif Yabacı", Hours: "6", Section: "01", ExcelTime: "Tu/Fr 09 - 12 Tu/Fr 13 - 15", Room: "E314-MTF E314-MTF" },
+            { Code: "ARCH 301-O", Name: "Architectural Design III", Lecturer: "Gültekin Doruk Atay", Hours: "6", Section: "01", ExcelTime: "Tu/Fr 13 - 15 Tu/Fr 09 - 12", Room: "E314-MTF E314-MTF" },
+            { Code: "ARCH 381", Name: "Urban Design", Lecturer: "Seray Türkay Coşkun", Hours: "3", Section: "01", ExcelTime: "Mo 09 - 13", Room: "D026" },
+            { Code: "BA 305", Name: "Production and Operations Management", Lecturer: "Hakan Bütüner", Hours: "3", Section: "01", ExcelTime: "Mo 12 - 15 Th 17 - 18", Room: "G213 GB13-PC-L" },
+            { Code: "CE 214", Name: "Introduction to Mechanics of Materials", Lecturer: "Rıza Secer Orkun Keskin", Hours: "4", Section: "01", ExcelTime: "Tu 14 - 16 We 14 - 15 Fr 15 - 17", Room: "G101 DB102-MF-L DB102-MF-L" },
+            { Code: "CE 331", Name: "Hydromechanics", Lecturer: "Aslı Numanoğlu Genç", Hours: "4", Section: "01", ExcelTime: "We 15 - 16 Th 12 - 14 Fr 13 - 15", Room: "G101 DB102-MF-L DB102-MF-L" },
+            { Code: "CMPE 113", Name: "Fundamentals of Programming I", Lecturer: "Semihanur Aktay Subaşı", Hours: "3", Section: "01", ExcelTime: "Tu 15 - 17 We 14 - 16", Room: "DB14 A514-PC-L" },
+            { Code: "ECON 101", Name: "Introduction to Economics", Lecturer: "Günnur Ege Bilgin", Hours: "3", Section: "01", ExcelTime: "Tu 13 - 16 Th 14 - 16", Room: "G213 DB102" },
+            { Code: "CITY 101-O", Name: "Introduction to City Planning", Lecturer: "Irmak Yavuz Özgür, Baykan Günay", Hours: "6", Section: "01", ExcelTime: "Tu/Fr 09 - 12 Tu/Fr 13 - 15", Room: "E315-MTF E315-MTF" }
         ];
         
         // Initialize the page
@@ -1371,12 +1473,22 @@
             if (selectedLectures.length === 0) {
                 combinationsContainer.style.display = 'none';
                 timetableControls.style.display = 'none';
+                const exportControls = document.getElementById('exportControls');
+                if (exportControls) {
+                    exportControls.style.display = 'none';
+                }
                 validCombinations = [];
                 clearTimetable();
                 return;
             }
             
             combinationsContainer.style.display = 'block';
+            
+            // Show export controls
+            const exportControls = document.getElementById('exportControls');
+            if (exportControls) {
+                exportControls.style.display = 'block';
+            }
             
             // Group selected lectures by alternative groups
             const alternativeGroups = {};
@@ -1487,7 +1599,13 @@
                 
                 return `
                 <div style="margin-bottom: 20px; padding: 15px; border: 2px solid ${borderColor}; border-radius: 10px; background: ${backgroundColor};">
-                    <h4 style="margin: 0 0 15px 0; color: ${isValidCombination ? '#007bff' : '#dc3545'}; display: flex; align-items: center;">Combination ${index + 1}${conflictBadge}</h4>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+                        <h4 style="margin: 0; color: ${isValidCombination ? '#007bff' : '#dc3545'}; display: flex; align-items: center;">Combination ${index + 1}${conflictBadge}</h4>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #666;">
+                            <input type="checkbox" class="combination-export-checkbox" data-index="${index}" onchange="toggleCombinationSelection(${index})" style="cursor: pointer; transform: scale(1.2);">
+                            Export
+                        </label>
+                    </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px;">
                         ${combination.map(lectureGroup => {
                             const firstLecture = lectureGroup[0];
@@ -1498,7 +1616,10 @@
                                     <div style="color: #333; margin-top: 5px;">${firstLecture.Lecturer}</div>
                                     <div style="color: #666; font-size: 12px; margin-top: 3px;">Excel: ${firstLecture.ExcelTime}</div>
                                     ${lectureGroup.map(lecture => 
-                                        `<div style="color: #28a745; font-weight: bold; margin-top: 3px; font-size: 12px;">${lecture.Day} ${lecture.StartHour}:00-${lecture.EndHour}:00</div>`
+                                        `<div style="margin-top: 3px;">
+                                            <div style="color: #28a745; font-weight: bold; font-size: 12px;">${lecture.Day} ${lecture.StartHour}:00-${lecture.EndHour}:00</div>
+                                            <div style="color: #6c757d; font-size: 11px; margin-left: 10px;">Room: ${lecture.Room || 'TBA'}</div>
+                                        </div>`
                                     ).join('')}
                                 </div>
                             `;
@@ -1510,6 +1631,10 @@
                 </div>
                 `;
             }).join('');
+            
+            // Clear previous export selections and update controls
+            selectedCombinationsForExport.clear();
+            updateExportControls();
             
             // Auto-select first valid combination if available, otherwise first combination
             const firstValidIndex = validCombinations.findIndex(combination => countTimeConflicts(combination) <= maxAllowedConflicts);
@@ -1749,7 +1874,8 @@
                     lectureBlock.innerHTML = `
                         <div style="font-size: 10px; font-weight: bold; margin-bottom: 2px;">${lecture.Code}</div>
                         <div style="font-size: 8px; opacity: 0.9; margin-bottom: 2px;">Sec ${lecture.Section}</div>
-                        <div style="font-size: 7px; opacity: 0.8;">${lecture.Lecturer || 'TBA'}</div>
+                        <div style="font-size: 7px; opacity: 0.8; margin-bottom: 1px;">${lecture.Lecturer || 'TBA'}</div>
+                        <div style="font-size: 6px; opacity: 0.7; margin-bottom: 2px;">${lecture.Room || 'TBA'}</div>
                         <div style="font-size: 6px; color: #dc3545; font-weight: bold; margin-top: 2px;">CONFLICT</div>
                     `;
                     
@@ -1790,7 +1916,8 @@
                     lectureBlock.innerHTML = `
                         <div style="font-size: ${duration >= 3 ? '14px' : '12px'}; font-weight: bold; margin-bottom: 4px;">${lecture.Code}</div>
                         <div style="font-size: ${duration >= 3 ? '12px' : '10px'}; opacity: 0.9; margin-bottom: 4px;">Sec ${lecture.Section}</div>
-                        <div style="font-size: ${duration >= 3 ? '11px' : '9px'}; opacity: 0.8;">${lecture.Lecturer || 'TBA'}</div>
+                        <div style="font-size: ${duration >= 3 ? '11px' : '9px'}; opacity: 0.8; margin-bottom: 3px;">${lecture.Lecturer || 'TBA'}</div>
+                        <div style="font-size: ${duration >= 3 ? '10px' : '8px'}; opacity: 0.7; margin-bottom: 3px;">${lecture.Room || 'TBA'}</div>
                         <div style="font-size: ${duration >= 3 ? '10px' : '8px'}; opacity: 0.7; margin-top: 4px;">${startHour}:00-${endHour}:00</div>
                     `;
                     
@@ -2035,6 +2162,389 @@
                 button.innerHTML = '▼';
                 button.title = 'Show Selected Lectures';
             }
+        }
+
+        // Export functionality functions
+        
+        // Toggle combination selection for export
+        function toggleCombinationSelection(combinationIndex) {
+            if (selectedCombinationsForExport.has(combinationIndex)) {
+                selectedCombinationsForExport.delete(combinationIndex);
+            } else {
+                selectedCombinationsForExport.add(combinationIndex);
+            }
+            
+            updateExportControls();
+        }
+        
+        // Select all combinations for export
+        function selectAllCombinationsForExport() {
+            selectedCombinationsForExport.clear();
+            for (let i = 0; i < validCombinations.length; i++) {
+                selectedCombinationsForExport.add(i);
+            }
+            
+            updateExportControls();
+            updateCombinationCheckboxes();
+        }
+        
+        // Clear all combination selections
+        function clearAllCombinationSelections() {
+            selectedCombinationsForExport.clear();
+            updateExportControls();
+            updateCombinationCheckboxes();
+        }
+        
+        // Update export controls state
+        function updateExportControls() {
+            const exportButton = document.querySelector('button[onclick="exportSelectedCombinations()"]');
+            const selectedCountDisplay = document.getElementById('selectedCountDisplay');
+            const count = selectedCombinationsForExport.size;
+            
+            if (exportButton) {
+                exportButton.disabled = count === 0;
+                exportButton.style.opacity = count === 0 ? '0.5' : '1';
+                exportButton.style.cursor = count === 0 ? 'not-allowed' : 'pointer';
+            }
+            
+            if (selectedCountDisplay) {
+                selectedCountDisplay.textContent = `${count} combination${count !== 1 ? 's' : ''} selected for export`;
+            }
+        }
+        
+        // Update checkbox states in combination list
+        function updateCombinationCheckboxes() {
+            const checkboxes = document.querySelectorAll('.combination-export-checkbox');
+            checkboxes.forEach(checkbox => {
+                const index = parseInt(checkbox.dataset.index);
+                checkbox.checked = selectedCombinationsForExport.has(index);
+            });
+        }
+        
+        // Export selected combinations as PNG
+        async function exportSelectedCombinations() {
+            if (selectedCombinationsForExport.size === 0) {
+                alert('Please select at least one combination to export.');
+                return;
+            }
+            
+            const exportStatus = document.getElementById('exportStatus');
+            const selectedIndices = Array.from(selectedCombinationsForExport).sort((a, b) => a - b);
+            
+            exportStatus.textContent = 'Preparing export...';
+            exportStatus.style.color = '#007bff';
+            
+            try {
+                for (let i = 0; i < selectedIndices.length; i++) {
+                    const combinationIndex = selectedIndices[i];
+                    exportStatus.textContent = `Exporting combination ${i + 1} of ${selectedIndices.length}...`;
+                    
+                    // Switch to this combination temporarily
+                    const originalIndex = currentCombinationIndex;
+                    currentCombinationIndex = combinationIndex;
+                    displayCombinationInTimetable();
+                    
+                    // Wait a moment for the DOM to update
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Capture the timetable
+                    await exportTimetableAsPNG(combinationIndex + 1);
+                    
+                    // Restore original combination if it was different
+                    if (originalIndex !== combinationIndex) {
+                        currentCombinationIndex = originalIndex;
+                        displayCombinationInTimetable();
+                    }
+                }
+                
+                exportStatus.textContent = `Successfully exported ${selectedIndices.length} combination${selectedIndices.length !== 1 ? 's' : ''}!`;
+                exportStatus.style.color = '#28a745';
+                
+                // Clear status after 3 seconds
+                setTimeout(() => {
+                    exportStatus.textContent = '';
+                }, 3000);
+                
+            } catch (error) {
+                console.error('Export error:', error);
+                exportStatus.textContent = 'Export failed. Please try again.';
+                exportStatus.style.color = '#dc3545';
+                
+                setTimeout(() => {
+                    exportStatus.textContent = '';
+                }, 3000);
+            }
+        }
+        
+        // Export timetable as PNG using html2canvas
+        async function exportTimetableAsPNG(combinationNumber) {
+            const timetableContainer = document.querySelector('.timetable-container');
+            
+            if (!timetableContainer) {
+                throw new Error('Timetable container not found');
+            }
+
+            // Create temporary export container
+            const exportContainer = await createExportContainer(combinationNumber);
+            
+            try {
+                // Configure html2canvas options
+                const canvas = await html2canvas(exportContainer, {
+                    backgroundColor: '#ffffff',
+                    scale: 2, // Higher resolution
+                    useCORS: true,
+                    allowTaint: false,
+                    width: exportContainer.scrollWidth,
+                    height: exportContainer.scrollHeight,
+                    windowWidth: exportContainer.scrollWidth,
+                    windowHeight: exportContainer.scrollHeight
+                });
+                
+                // Convert canvas to blob and download
+                canvas.toBlob(blob => {
+                    if (blob) {
+                        const link = document.createElement('a');
+                        link.href = URL.createObjectURL(blob);
+                        link.download = `timetable-combination-${combinationNumber}.png`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(link.href);
+                    }
+                }, 'image/png', 1.0);
+                
+            } catch (error) {
+                console.error('Error capturing timetable:', error);
+                throw error;
+            } finally {
+                // Clean up temporary container
+                if (exportContainer && exportContainer.parentNode) {
+                    exportContainer.parentNode.removeChild(exportContainer);
+                }
+            }
+        }
+
+        // Create a temporary container for export with timetable and combination details
+        async function createExportContainer(combinationNumber) {
+            const timetableContainer = document.querySelector('.timetable-container');
+            const combinationIndex = combinationNumber - 1;
+            const combination = validCombinations[combinationIndex];
+            
+            if (!combination) {
+                throw new Error('Combination not found');
+            }
+
+            // Create main export container
+            const exportContainer = document.createElement('div');
+            exportContainer.style.cssText = `
+                position: absolute;
+                top: -10000px;
+                left: -10000px;
+                width: 1400px;
+                background: white;
+                padding: 30px;
+                font-family: Arial, sans-serif;
+                box-sizing: border-box;
+            `;
+
+            // Create header section
+            const headerSection = document.createElement('div');
+            headerSection.style.cssText = `
+                text-align: center;
+                margin-bottom: 25px;
+                padding-bottom: 20px;
+                border-bottom: 2px solid #007bff;
+            `;
+
+            const title = document.createElement('h1');
+            title.textContent = 'University Schedule Creator';
+            title.style.cssText = `
+                color: #333;
+                font-size: 28px;
+                margin: 0 0 10px 0;
+                font-weight: bold;
+            `;
+
+            const subtitle = document.createElement('h2');
+            subtitle.textContent = `Timetable - Combination ${combinationNumber}`;
+            subtitle.style.cssText = `
+                color: #007bff;
+                font-size: 20px;
+                margin: 0;
+                font-weight: 600;
+            `;
+
+            headerSection.appendChild(title);
+            headerSection.appendChild(subtitle);
+
+            // Create content section with two columns
+            const contentSection = document.createElement('div');
+            contentSection.style.cssText = `
+                display: flex;
+                gap: 30px;
+                align-items: flex-start;
+            `;
+
+            // Left column - Timetable
+            const timetableColumn = document.createElement('div');
+            timetableColumn.style.cssText = `
+                flex: 2;
+                min-width: 800px;
+            `;
+
+            // Clone the timetable
+            const timetableClone = timetableContainer.cloneNode(true);
+            timetableClone.style.cssText = `
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+                margin: 0;
+            `;
+
+            timetableColumn.appendChild(timetableClone);
+
+            // Right column - Combination details
+            const detailsColumn = document.createElement('div');
+            detailsColumn.style.cssText = `
+                flex: 1;
+                min-width: 400px;
+                background: #f8f9fa;
+                border-radius: 10px;
+                padding: 20px;
+                border: 1px solid #e9ecef;
+            `;
+
+            // Calculate conflict information
+            const conflictCount = countTimeConflicts(combination);
+            const isValidCombination = conflictCount <= maxAllowedConflicts;
+
+            // Create details content
+            const detailsTitle = document.createElement('h3');
+            detailsTitle.textContent = 'Combination Details';
+            detailsTitle.style.cssText = `
+                color: #333;
+                font-size: 18px;
+                margin: 0 0 15px 0;
+                font-weight: bold;
+                border-bottom: 1px solid #dee2e6;
+                padding-bottom: 10px;
+            `;
+
+            // Conflict status
+            const conflictStatus = document.createElement('div');
+            const conflictText = conflictCount === 0 ? 'No conflicts' : 
+                                `${conflictCount} conflict${conflictCount > 1 ? 's' : ''}${!isValidCombination ? ' (EXCEEDS LIMIT)' : ''}`;
+            const statusColor = conflictCount === 0 ? '#28a745' : (isValidCombination ? '#ffc107' : '#dc3545');
+            const statusBgColor = conflictCount === 0 ? '#d4edda' : (isValidCombination ? '#fff3cd' : '#f8d7da');
+            
+            conflictStatus.innerHTML = `
+                <div style="
+                    background: ${statusBgColor};
+                    color: ${statusColor};
+                    padding: 8px 12px;
+                    border-radius: 5px;
+                    font-weight: bold;
+                    margin-bottom: 20px;
+                    text-align: center;
+                    border: 1px solid ${statusColor};
+                ">${conflictText}</div>
+            `;
+
+            // Course list
+            const courseList = document.createElement('div');
+            courseList.innerHTML = combination.map(lectureGroup => {
+                const firstLecture = lectureGroup[0];
+                const lectureColor = getLectureColor(firstLecture.Code);
+                
+                return `
+                    <div style="
+                        margin-bottom: 15px;
+                        padding: 12px;
+                        background: white;
+                        border-radius: 8px;
+                        border-left: 4px solid #007bff;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    ">
+                        <div style="
+                            font-weight: bold;
+                            color: #007bff;
+                            font-size: 14px;
+                            margin-bottom: 5px;
+                        ">${firstLecture.Code} - Section ${firstLecture.Section}</div>
+                        
+                        <div style="
+                            color: #666;
+                            font-size: 13px;
+                            margin-bottom: 5px;
+                            line-height: 1.3;
+                        ">${firstLecture.Name}</div>
+                        
+                        <div style="
+                            color: #333;
+                            font-size: 12px;
+                            margin-bottom: 8px;
+                            font-weight: 500;
+                        ">${firstLecture.Lecturer || 'TBA'}</div>
+                        
+                        <div style="
+                            font-size: 11px;
+                            color: #666;
+                            margin-bottom: 5px;
+                        ">Schedule:</div>
+                        
+                        ${lectureGroup.map(lecture => `
+                            <div style="margin-left: 10px; margin-bottom: 4px;">
+                                <div style="
+                                    color: #28a745;
+                                    font-weight: bold;
+                                    font-size: 11px;
+                                ">${lecture.Day} ${lecture.StartHour.toString().padStart(2, '0')}:00-${lecture.EndHour.toString().padStart(2, '0')}:00</div>
+                                <div style="
+                                    color: #6c757d;
+                                    font-size: 10px;
+                                    margin-left: 10px;
+                                ">Room: ${lecture.Room || 'TBA'}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }).join('');
+
+            // Export info footer
+            const exportInfo = document.createElement('div');
+            exportInfo.style.cssText = `
+                margin-top: 20px;
+                padding-top: 15px;
+                border-top: 1px solid #dee2e6;
+                font-size: 11px;
+                color: #666;
+                text-align: center;
+            `;
+            
+            const exportDate = new Date().toLocaleString();
+            exportInfo.innerHTML = `
+                <div>Exported: ${exportDate}</div>
+                <div style="margin-top: 3px;">Max Conflicts Allowed: ${maxAllowedConflicts}</div>
+            `;
+
+            // Assemble details column
+            detailsColumn.appendChild(detailsTitle);
+            detailsColumn.appendChild(conflictStatus);
+            detailsColumn.appendChild(courseList);
+            detailsColumn.appendChild(exportInfo);
+
+            // Assemble content section
+            contentSection.appendChild(timetableColumn);
+            contentSection.appendChild(detailsColumn);
+
+            // Assemble export container
+            exportContainer.appendChild(headerSection);
+            exportContainer.appendChild(contentSection);
+
+            // Add to DOM temporarily
+            document.body.appendChild(exportContainer);
+
+            return exportContainer;
         }
         </script>
 </body>
