@@ -286,12 +286,32 @@
             text-align: center;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             transition: all 0.2s ease;
+            z-index: 10;
         }
         
         .lecture-block:hover {
-            transform: scale(1.05);
-            z-index: 2;
+            transform: scale(1.02);
+            z-index: 20;
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        
+        .lecture-block.multi-row {
+            position: absolute;
+            border-radius: 8px;
+            padding: 12px 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 10;
+        }
+        
+        .occupied-continuation {
+            background-color: transparent !important;
+            border: none !important;
+            position: relative;
+            z-index: 5;
         }
         
         .lecture-code {
@@ -393,6 +413,20 @@
                     <div id="lectureList" class="lecture-list" style="padding: 10px;">
                         <div id="loadingMessage" style="text-align: center; color: #666;">Loading lectures...</div>
                         <div id="lectureResults"></div>
+                    </div>
+                </div>
+                
+                <!-- Conflict Settings Section -->
+                <div class="conflict-settings-container" style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px; border: 1px solid #e9ecef;">
+                    <h3 style="margin: 0 0 15px 0; color: #495057;">Conflict Settings</h3>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <label for="maxConflicts" style="font-weight: 500; color: #495057;">Maximum Conflicting Hours Allowed:</label>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="range" id="maxConflicts" min="0" max="10" value="0" 
+                                   style="flex: 1;" onchange="updateConflictSettings()">
+                            <span id="conflictValue" style="font-weight: bold; color: #007bff; min-width: 30px;">0</span>
+                        </div>
+                        <small style="color: #6c757d;">Set to 0 for no conflicts (default), increase to allow overlapping lectures</small>
                     </div>
                 </div>
                 
@@ -802,7 +836,10 @@
             validCombinations = combinations.filter(combination => !hasTimeConflict(combination));
             
             if (validCombinations.length === 0) {
-                container.innerHTML = '<p style="color: #dc3545; text-align: center; padding: 20px;">No valid combinations found. Selected lectures have conflicting time slots.</p>';
+                const totalCombinations = combinations.length;
+                container.innerHTML = `<p style="color: #dc3545; text-align: center; padding: 20px;">No valid combinations found with current conflict settings.<br>
+                    <small>Found ${totalCombinations} total combinations, but all exceed ${maxAllowedConflicts} allowed conflict hours.<br>
+                    Try increasing the maximum allowed conflicts above.</small></p>`;
                 timetableControls.style.display = 'none';
                 clearTimetable();
                 return;
@@ -812,10 +849,16 @@
             timetableControls.style.display = 'block';
             populateCombinationSelector();
             
-            // Display combinations list
-            container.innerHTML = validCombinations.map((combination, index) => `
+            // Display combinations list with conflict information
+            container.innerHTML = validCombinations.map((combination, index) => {
+                const conflictCount = countTimeConflicts(combination);
+                const conflictBadge = conflictCount > 0 ? 
+                    `<span style="background: #ffc107; color: #856404; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 10px;">${conflictCount} conflict${conflictCount > 1 ? 's' : ''}</span>` : 
+                    '<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 10px;">No conflicts</span>';
+                
+                return `
                 <div style="margin-bottom: 20px; padding: 15px; border: 2px solid #e0e0e0; border-radius: 10px; background: white;">
-                    <h4 style="margin: 0 0 15px 0; color: #007bff;">Combination ${index + 1}</h4>
+                    <h4 style="margin: 0 0 15px 0; color: #007bff; display: flex; align-items: center;">Combination ${index + 1}${conflictBadge}</h4>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px;">
                         ${combination.map(lectureGroup => {
                             const firstLecture = lectureGroup[0];
@@ -836,7 +879,8 @@
                         Show in Timetable
                     </button>
                 </div>
-            `).join('');
+                `;
+            }).join('');
             
             // Auto-select first combination if available
             if (validCombinations.length > 0) {
@@ -996,7 +1040,7 @@
             console.log('Modern timetable cleared, locked slots preserved');
         }
         
-        // Place a lecture in the correct timetable cells - modern design
+        // Place a lecture in the correct timetable cells - spanning multiple rows
         function placeLectureInTimetable(lecture) {
             console.log('=== Placing lecture ===');
             console.log('Lecture object:', lecture);
@@ -1009,46 +1053,60 @@
             const day = lecture.Day;
             const startHour = lecture.StartHour;
             const endHour = lecture.EndHour;
+            const duration = endHour - startHour;
             
             // Get a color scheme for this lecture
             const colorClasses = ['lecture-colors', 'lecture-colors-alt', 'lecture-colors-alt2', 'lecture-colors-alt3', 'lecture-colors-alt4'];
             const colorIndex = Math.abs(lecture.Code.charCodeAt(0) + lecture.Code.charCodeAt(1)) % colorClasses.length;
             const colorClass = colorClasses[colorIndex];
             
-            console.log(`Placing ${lecture.Code} on ${day} from ${startHour}:00 to ${endHour}:00`);
+            console.log(`Placing ${lecture.Code} on ${day} from ${startHour}:00 to ${endHour}:00 (${duration} hours)`);
             
-            // Place lecture in each hour it occupies
+            // Clear all cells that this lecture will span
             for (let hour = startHour; hour < endHour; hour++) {
                 const cellId = `cell_${day}_${hour}`;
                 const cell = document.getElementById(cellId);
-                
                 if (cell) {
-                    const isFirstHour = (hour === startHour);
-                    
-                    if (isFirstHour) {
-                        // First hour - show full information
-                        cell.innerHTML = `
-                            <div class="lecture-block ${colorClass}">
-                                <div class="lecture-code">${lecture.Code}</div>
-                                <div class="lecture-section">Sec ${lecture.Section}</div>
-                                <div class="lecture-lecturer">${lecture.Lecturer || 'TBA'}</div>
-                            </div>
-                        `;
-                    } else {
-                        // Continuation hours - show abbreviated info
-                        cell.innerHTML = `
-                            <div class="lecture-block lecture-continuation">
-                                <div class="lecture-code">${lecture.Code}</div>
-                                <div style="font-size: 8px; opacity: 0.8;">(cont.)</div>
-                            </div>
-                        `;
-                    }
-                } else {
-                    console.error(`Cell not found: ${cellId}`);
+                    cell.innerHTML = '';
+                    cell.className = 'timetable-cell';
+                    cell.style.pointerEvents = '';
+                    cell.classList.remove('occupied-continuation');
                 }
             }
             
-            console.log(`Lecture ${lecture.Code} placed successfully`);
+            // Place the lecture block only in the first cell, but make it span multiple rows
+            const firstCellId = `cell_${day}_${startHour}`;
+            const firstCell = document.getElementById(firstCellId);
+            
+            if (firstCell) {
+                // Calculate the height needed based on actual cell dimensions
+                // Each cell: min-height 58px + 2px border (1px top + 1px bottom) = 60px total
+                const cellHeight = 60; // 58px min-height + 2px border
+                const blockHeight = (duration * cellHeight) - 4; // -4 for internal padding
+                
+                firstCell.innerHTML = `
+                    <div class="lecture-block multi-row ${colorClass}" style="height: ${blockHeight}px;">
+                        <div class="lecture-code" style="font-size: ${duration >= 3 ? '14px' : '12px'}; font-weight: bold; margin-bottom: 4px;">${lecture.Code}</div>
+                        <div class="lecture-section" style="font-size: ${duration >= 3 ? '12px' : '10px'}; opacity: 0.9; margin-bottom: 4px;">Sec ${lecture.Section}</div>
+                        <div class="lecture-lecturer" style="font-size: ${duration >= 3 ? '11px' : '9px'}; opacity: 0.8; line-height: 1.3;">${lecture.Lecturer || 'TBA'}</div>
+                        <div style="font-size: ${duration >= 3 ? '10px' : '8px'}; opacity: 0.7; margin-top: 4px;">${startHour}:00-${endHour}:00</div>
+                    </div>
+                `;
+                
+                // Mark subsequent cells as occupied (but empty) to prevent clicking
+                for (let hour = startHour + 1; hour < endHour; hour++) {
+                    const cellId = `cell_${day}_${hour}`;
+                    const cell = document.getElementById(cellId);
+                    if (cell) {
+                        cell.style.pointerEvents = 'none'; // Prevent clicking on continuation cells
+                        cell.classList.add('occupied-continuation');
+                    }
+                }
+            } else {
+                console.error(`Cell not found: ${firstCellId}`);
+            }
+            
+            console.log(`Lecture ${lecture.Code} placed successfully as ${duration}-hour spanning block`);
         }
         
         // Generate all possible combinations from arrays
@@ -1069,7 +1127,10 @@
         }
         
         // Check if a combination has time conflicts - updated for multiple time slots and locked slots
-        function hasTimeConflict(combination) {
+        // Global variable to store maximum allowed conflicts
+        let maxAllowedConflicts = 0;
+        
+        function countTimeConflicts(combination) {
             // Get all time slots for all lectures in the combination
             const allTimeSlots = [];
             
@@ -1089,13 +1150,15 @@
                 });
             });
             
+            let conflictHours = 0;
+            
             // Check for conflicts with locked time slots
             for (const timeSlot of allTimeSlots) {
                 for (let hour = timeSlot.StartHour; hour < timeSlot.EndHour; hour++) {
                     const slotKey = `${timeSlot.Day}_${hour}`;
                     if (lockedTimeSlots.has(slotKey)) {
                         console.log('Conflict with locked slot:', slotKey, 'for lecture:', timeSlot.Code);
-                        return true;
+                        conflictHours++;
                     }
                 }
             }
@@ -1113,22 +1176,47 @@
                     
                     // Check if they're on the same day
                     if (slot1.Day === slot2.Day) {
-                        // Check if time ranges overlap
-                        const overlap = !(slot1.EndHour <= slot2.StartHour || slot2.EndHour <= slot1.StartHour);
-                        if (overlap) {
-                            console.log('Time conflict detected:', 
+                        // Calculate overlapping hours
+                        const overlapStart = Math.max(slot1.StartHour, slot2.StartHour);
+                        const overlapEnd = Math.min(slot1.EndHour, slot2.EndHour);
+                        
+                        if (overlapStart < overlapEnd) {
+                            const overlapHours = overlapEnd - overlapStart;
+                            conflictHours += overlapHours;
+                            console.log(`Time conflict detected: ${overlapHours} hours between`, 
                                 `${slot1.Code}-${slot1.Section} vs ${slot2.Code}-${slot2.Section} on ${slot1.Day}`);
-                            return true;
                         }
                     }
                 }
             }
-            return false;
+            
+            return conflictHours;
+        }
+        
+        function hasTimeConflict(combination) {
+            const conflicts = countTimeConflicts(combination);
+            return conflicts > maxAllowedConflicts;
         }
         
         // Check if two time ranges overlap
         function timeRangesOverlap(range1, range2) {
             return range1.start < range2.end && range2.start < range1.end;
+        }
+        
+        // Update conflict settings when slider changes
+        function updateConflictSettings() {
+            const slider = document.getElementById('maxConflicts');
+            const valueDisplay = document.getElementById('conflictValue');
+            
+            maxAllowedConflicts = parseInt(slider.value);
+            valueDisplay.textContent = maxAllowedConflicts;
+            
+            console.log('Maximum allowed conflicts set to:', maxAllowedConflicts);
+            
+            // Regenerate combinations if lectures are already selected
+            if (selectedLectures.length > 0) {
+                generateTimetableCombinations();
+            }
         }
         </script>
 </body>
