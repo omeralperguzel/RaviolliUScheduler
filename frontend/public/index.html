@@ -519,8 +519,10 @@
                 
                 <!-- Conflict Settings Section -->
                 <div class="conflict-settings-container" style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px; border: 1px solid #e9ecef;">
-                    <h3 style="margin: 0 0 15px 0; color: #495057;">Conflict Settings</h3>
-                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <h3 style="margin: 0 0 15px 0; color: #495057;">Timetable Settings</h3>
+                    
+                    <!-- Conflict Settings -->
+                    <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
                         <label for="maxConflicts" style="font-weight: 500; color: #495057;">Maximum Conflicting Hours Allowed:</label>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <input type="range" id="maxConflicts" min="0" max="10" value="0" 
@@ -528,6 +530,17 @@
                             <span id="conflictValue" style="font-weight: bold; color: #007bff; min-width: 30px;">0</span>
                         </div>
                         <small style="color: #6c757d;">Set to 0 for no conflicts (default), increase to allow overlapping lectures</small>
+                    </div>
+                    
+                    <!-- Empty Days Settings -->
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <label for="minEmptyDays" style="font-weight: 500; color: #495057;">Minimum Empty Days Required:</label>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="range" id="minEmptyDays" min="0" max="5" value="0" 
+                                   style="flex: 1;" onchange="updateEmptyDaysSettings()">
+                            <span id="emptyDaysValue" style="font-weight: bold; color: #28a745; min-width: 30px;">0</span>
+                        </div>
+                        <small style="color: #6c757d;">Set to 0 for no requirement (default), increase to require more free days</small>
                     </div>
                 </div>
                 
@@ -1562,13 +1575,24 @@
             }
             
             // Generate combinations respecting alternative course groups
-            const combinations = generateAlternativeCombinations(processedLectureOptions);
+            const allCombinations = generateAlternativeCombinations(processedLectureOptions);
             
-            // Store all combinations for display
-            validCombinations = combinations;
+            // Filter combinations based on all validation criteria (conflicts, empty days, locked slots)
+            validCombinations = filterValidCombinations(allCombinations);
             
             if (validCombinations.length === 0) {
-                container.innerHTML = `<p style="color: #dc3545; text-align: center; padding: 20px;">No combinations possible with current selections and alternative course constraints.</p>`;
+                const totalGenerated = allCombinations.length;
+                const conflictFiltered = allCombinations.filter(c => countTimeConflicts(c) > maxAllowedConflicts).length;
+                const emptyDaysFiltered = allCombinations.filter(c => countEmptyDays(c) < minRequiredEmptyDays).length;
+                const lockedSlotsFiltered = allCombinations.filter(c => hasLockedTimeSlotConflicts(c)).length;
+                
+                let filterMessage = `No valid combinations found. Generated ${totalGenerated} total combinations, but all were filtered out:`;
+                if (conflictFiltered > 0) filterMessage += `<br>• ${conflictFiltered} had too many conflicts (>${maxAllowedConflicts})`;
+                if (emptyDaysFiltered > 0) filterMessage += `<br>• ${emptyDaysFiltered} had too few empty days (<${minRequiredEmptyDays})`;
+                if (lockedSlotsFiltered > 0) filterMessage += `<br>• ${lockedSlotsFiltered} conflicted with locked time slots`;
+                filterMessage += `<br><br>Try adjusting your filters or lecture selections.`;
+                
+                container.innerHTML = `<p style="color: #dc3545; text-align: center; padding: 20px; line-height: 1.6;">${filterMessage}</p>`;
                 timetableControls.style.display = 'none';
                 clearTimetable();
                 return;
@@ -1578,22 +1602,26 @@
             timetableControls.style.display = 'block';
             populateCombinationSelector();
             
-            // Display combinations list with conflict information
+            // Display valid combinations list
             container.innerHTML = validCombinations.map((combination, index) => {
                 const conflictCount = countTimeConflicts(combination);
-                const isValidCombination = conflictCount <= maxAllowedConflicts;
+                const emptyDaysCount = countEmptyDays(combination);
                 
                 const conflictBadge = conflictCount > 0 ? 
-                    `<span style="background: ${isValidCombination ? '#ffc107' : '#dc3545'}; color: ${isValidCombination ? '#856404' : 'white'}; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 10px;">${conflictCount} conflict${conflictCount > 1 ? 's' : ''}${isValidCombination ? '' : ' (EXCEEDS LIMIT)'}</span>` : 
-                    '<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 10px;">No conflicts</span>';
+                    `<span style="background: #ffc107; color: #856404; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 5px;">${conflictCount} conflict${conflictCount > 1 ? 's' : ''}</span>` : 
+                    '<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 5px;">No conflicts</span>';
                 
-                const borderColor = isValidCombination ? (conflictCount > 0 ? '#ffc107' : '#28a745') : '#dc3545';
-                const backgroundColor = isValidCombination ? 'white' : '#fff5f5';
+                const emptyDaysBadge = emptyDaysCount > 0 ? 
+                    `<span style="background: #17a2b8; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 5px;">${emptyDaysCount} empty day${emptyDaysCount > 1 ? 's' : ''}</span>` : 
+                    '<span style="background: #6f42c1; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 5px;">All days occupied</span>';
+                
+                const borderColor = conflictCount > 0 ? '#ffc107' : '#28a745';
+                const backgroundColor = 'white';
                 
                 return `
                 <div style="margin-bottom: 20px; padding: 15px; border: 2px solid ${borderColor}; border-radius: 10px; background: ${backgroundColor};">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
-                        <h4 style="margin: 0; color: ${isValidCombination ? '#007bff' : '#dc3545'}; display: flex; align-items: center;">Combination ${index + 1}${conflictBadge}</h4>
+                        <h4 style="margin: 0; color: #007bff; display: flex; align-items: center;">Combination ${index + 1}${conflictBadge}</h4>
                         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #666;">
                             <input type="checkbox" class="combination-export-checkbox" data-index="${index}" onchange="toggleCombinationSelection(${index})" style="cursor: pointer; transform: scale(1.2);">
                             Export
@@ -1618,8 +1646,8 @@
                             `;
                         }).join('')}
                     </div>
-                    <button onclick="selectCombinationInDropdown(${index})" style="margin-top: 15px; padding: 8px 16px; background: ${isValidCombination ? '#007bff' : '#6c757d'}; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                        ${isValidCombination ? 'Show in Timetable' : 'View Conflicts'}
+                    <button onclick="selectCombinationInDropdown(${index})" style="margin-top: 15px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        Show in Timetable
                     </button>
                 </div>
                 `;
@@ -1629,12 +1657,8 @@
             selectedCombinationsForExport.clear();
             updateExportControls();
             
-            // Auto-select first valid combination if available, otherwise first combination
-            const firstValidIndex = validCombinations.findIndex(combination => countTimeConflicts(combination) <= maxAllowedConflicts);
-            if (firstValidIndex !== -1) {
-                currentCombinationIndex = firstValidIndex;
-                displayCombinationInTimetable();
-            } else if (validCombinations.length > 0) {
+            // Auto-select first combination if available
+            if (validCombinations.length > 0) {
                 currentCombinationIndex = 0;
                 displayCombinationInTimetable();
             }
@@ -1645,19 +1669,18 @@
             const selector = document.getElementById('combinationSelector');
             const info = document.getElementById('combinationInfo');
             
-            const validCount = validCombinations.filter(combination => countTimeConflicts(combination) <= maxAllowedConflicts).length;
-            const conflictedCount = validCombinations.length - validCount;
+            const totalCount = validCombinations.length;
             
             selector.innerHTML = '<option value="">Select a combination...</option>' +
                 validCombinations.map((combination, index) => {
                     const conflictCount = countTimeConflicts(combination);
-                    const isValid = conflictCount <= maxAllowedConflicts;
+                    const emptyDaysCount = countEmptyDays(combination);
                     const conflictText = conflictCount > 0 ? ` (${conflictCount} conflicts)` : '';
-                    const statusText = isValid ? '' : ' - EXCEEDS LIMIT';
-                    return `<option value="${index}">Combination ${index + 1}${conflictText}${statusText}</option>`;
+                    const emptyDaysText = emptyDaysCount > 0 ? ` (${emptyDaysCount} empty days)` : '';
+                    return `<option value="${index}">Combination ${index + 1}${conflictText}${emptyDaysText}</option>`;
                 }).join('');
             
-            info.textContent = `${validCount} valid, ${conflictedCount} conflicted combination(s) found`;
+            info.textContent = `${totalCount} valid combination(s) found`;
         }
         
         // Select combination from dropdown
@@ -2186,15 +2209,7 @@
             
             let conflictHours = 0;
             
-            // Check for conflicts with locked time slots
-            allTimeSlots.forEach(slot => {
-                const slotKey = `${slot.Day}_${slot.Hour}`;
-                if (lockedTimeSlots.has(slotKey)) {
-                    conflictHours++;
-                }
-            });
-            
-            // Check for conflicts between lectures
+            // Only count conflicts between lectures (not with locked slots, since those are filtered out)
             for (let i = 0; i < allTimeSlots.length; i++) {
                 for (let j = i + 1; j < allTimeSlots.length; j++) {
                     const slot1 = allTimeSlots[i];
@@ -2215,6 +2230,59 @@
             }
             
             return conflictHours;
+        }
+        
+        // Count empty days in a combination
+        function countEmptyDays(combination) {
+            const occupiedDays = new Set();
+            
+            combination.forEach(lectureGroup => {
+                lectureGroup.forEach(lecture => {
+                    if (lecture.Day) {
+                        occupiedDays.add(lecture.Day);
+                    }
+                });
+            });
+            
+            const totalDays = days.length; // days array: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+            const emptyDaysCount = totalDays - occupiedDays.size;
+            
+            return emptyDaysCount;
+        }
+        
+        // Filter combinations based on all validation criteria
+        function filterValidCombinations(combinations) {
+            return combinations.filter(combination => {
+                const conflictCount = countTimeConflicts(combination);
+                const emptyDaysCount = countEmptyDays(combination);
+                const hasLockedConflicts = hasLockedTimeSlotConflicts(combination);
+                
+                // Check all criteria
+                const meetsConflictCriteria = conflictCount <= maxAllowedConflicts;
+                const meetsEmptyDaysCriteria = emptyDaysCount >= minRequiredEmptyDays;
+                const meetsLockedSlotsCriteria = !hasLockedConflicts;
+                
+                return meetsConflictCriteria && meetsEmptyDaysCriteria && meetsLockedSlotsCriteria;
+            });
+        }
+        
+        // Check if combination conflicts with locked time slots
+        function hasLockedTimeSlotConflicts(combination) {
+            if (lockedTimeSlots.size === 0) return false;
+            
+            for (const lectureGroup of combination) {
+                for (const lecture of lectureGroup) {
+                    // Check each hour of the lecture
+                    for (let hour = lecture.StartHour; hour < lecture.EndHour; hour++) {
+                        const slotKey = `${lecture.Day}_${hour}`;
+                        if (lockedTimeSlots.has(slotKey)) {
+                            return true; // Found a conflict with locked slots
+                        }
+                    }
+                }
+            }
+            
+            return false; // No conflicts with locked slots
         }
         
         function hasTimeConflict(combination) {
@@ -2265,6 +2333,9 @@
         // Global variable to store maximum allowed conflicts
         let maxAllowedConflicts = 0;
         
+        // Global variable to store minimum required empty days
+        let minRequiredEmptyDays = 0;
+        
         // Update conflict settings when slider changes
         function updateConflictSettings() {
             const slider = document.getElementById('maxConflicts');
@@ -2274,6 +2345,22 @@
             valueDisplay.textContent = maxAllowedConflicts;
             
             console.log('Maximum allowed conflicts set to:', maxAllowedConflicts);
+            
+            // Regenerate combinations if lectures are already selected
+            if (selectedLectures.length > 0) {
+                generateTimetableCombinations();
+            }
+        }
+        
+        // Update empty days settings when slider changes
+        function updateEmptyDaysSettings() {
+            const slider = document.getElementById('minEmptyDays');
+            const valueDisplay = document.getElementById('emptyDaysValue');
+            
+            minRequiredEmptyDays = parseInt(slider.value);
+            valueDisplay.textContent = minRequiredEmptyDays;
+            
+            console.log('Minimum required empty days set to:', minRequiredEmptyDays);
             
             // Regenerate combinations if lectures are already selected
             if (selectedLectures.length > 0) {
