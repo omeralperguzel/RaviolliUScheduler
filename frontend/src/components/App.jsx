@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Header from './Header';
 import Footer from './Footer';
-//import Timetable from './Timetable';
 import LectureSelector from './LectureSelector';
 import TimeSlotLocker from './TimeSlotLocker';
 import { fetchLectures } from '../services/api';
@@ -34,11 +33,6 @@ const App = () => {
 
     return (
         <div>
-            <Header />
-            <LectureSelector lectures={lectures} onLectureSelect={handleLectureSelect} />
-            <TimeSlotLocker onLockChange={handleLockChange} />
-            <Timetable selectedLectures={selectedLectures} lockedSlots={lockedSlots} />
-            <Footer />
         </div>
     );
 };

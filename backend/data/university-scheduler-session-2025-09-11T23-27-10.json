@@ -1,0 +1,134 @@
+{
+  "version": "1.0",
+  "timestamp": "2025-09-11T23:27:10.566Z",
+  "applicationState": {
+    "selectedLectures": [
+      {
+        "Code": "CMPE 361",
+        "Name": "Computer Organization",
+        "Section": "CMPE 361_01",
+        "Hours": 3,
+        "Lecturer": "Saiful Islam ",
+        "Room": "D028",
+        "ExcelTime": "Tu 15 - 17 Fr 09 - 11",
+        "Department": "Department of Computer Engineering",
+        "Category": "Course",
+        "ECTS": 6,
+        "Day": "Tuesday",
+        "StartHour": 15,
+        "EndHour": 17,
+        "TimeSlotIndex": 0
+      },
+      {
+        "Code": "CMPE 223",
+        "Name": "Data Structures and Algorithms I",
+        "Section": "CMPE 223_01",
+        "Hours": 3,
+        "Lecturer": "Ulaþ Güleç ",
+        "Room": "D028",
+        "ExcelTime": "Th 09 - 11 Fr 13 - 14",
+        "Department": "Department of Computer Engineering",
+        "Category": "Course",
+        "ECTS": 6,
+        "Day": "Thursday",
+        "StartHour": 9,
+        "EndHour": 11,
+        "TimeSlotIndex": 0
+      },
+      {
+        "Code": "CMPE 472",
+        "Name": "Computer Networks",
+        "Section": "CMPE 472_01",
+        "Hours": 3,
+        "Lecturer": "Emin Kuðu ",
+        "Room": "A514-PC-L",
+        "ExcelTime": "Mo 11 - 13 Tu 09 - 11",
+        "Department": "Department of Computer Engineering",
+        "Category": "Course",
+        "ECTS": 6,
+        "Day": "Monday",
+        "StartHour": 11,
+        "EndHour": 13,
+        "TimeSlotIndex": 0
+      },
+      {
+        "Code": "SOC 103",
+        "Name": "Introduction to Sociology",
+        "Section": "SOC 103_01",
+        "Hours": 3,
+        "Lecturer": "Gül Çorbacýoðlu Aksak (S) ",
+        "Room": "G003",
+        "ExcelTime": "We 16 - 19",
+        "Department": "Department of Sociology",
+        "Category": "Course",
+        "ECTS": 5,
+        "Day": "Wednesday",
+        "StartHour": 16,
+        "EndHour": 19,
+        "TimeSlotIndex": 0
+      },
+      {
+        "Code": "ECON 101-O",
+        "Name": "Economics I",
+        "Section": "ECON 101-O_1",
+        "Hours": 4,
+        "Lecturer": "Günnur Ege Bilgin (S) ",
+        "Room": "D026",
+        "ExcelTime": "Tu 13 - 16 Th 14 - 16",
+        "Department": "Department of Economics",
+        "Category": "Course",
+        "ECTS": 6,
+        "Day": "Tuesday",
+        "StartHour": 13,
+        "EndHour": 16,
+        "TimeSlotIndex": 0
+      }
+    ],
+    "currentCombinationIndex": 0,
+    "lecturerPreferences": {},
+    "sectionPreferences": {},
+    "lectureColors": {
+      "CMPE 361": {
+        "bg": "linear-gradient(135deg, #26c6da, #00bcd4)",
+        "text": "white"
+      },
+      "CMPE 223": {
+        "bg": "linear-gradient(135deg, #26c6da, #00bcd4)",
+        "text": "white"
+      },
+      "CMPE 472": {
+        "bg": "linear-gradient(135deg, #4db6ac, #009688)",
+        "text": "white"
+      },
+      "SOC 103": {
+        "bg": "linear-gradient(135deg, #90a4ae, #607d8b)",
+        "text": "white"
+      },
+      "ECON 101-O": {
+        "bg": "linear-gradient(135deg, #667eea, #764ba2)",
+        "text": "white"
+      }
+    },
+    "lockedTimeSlots": [],
+    "maxAllowedConflicts": 1,
+    "minRequiredEmptyDays": 2,
+    "alternativeCourseGroups": {
+      "alt_group_0": [
+        "SOC 103",
+        "ECON 101-O"
+      ],
+      "alt_group_2": [
+        "CMPE 361",
+        "CMPE 223"
+      ]
+    },
+    "courseToAlternativeGroup": {
+      "SOC 103": "alt_group_0",
+      "ECON 101-O": "alt_group_0",
+      "CMPE 361": "alt_group_2",
+      "CMPE 223": "alt_group_2"
+    },
+    "alternativeGroupCounter": 3,
+    "selectedCombinationsForExport": []
+  }
+}
