@@ -601,11 +601,19 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #024180 0%, #667eea 25%, #FFE224 50%, #D91C12 75%, #764ba2 100%);
+            background-size: 300% 300%;
+            animation: gradientShift 6s ease infinite;
             z-index: 9999;
             justify-content: center;
             align-items: center;
             font-family: 'Arial', sans-serif;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
         }
         
         .upload-container {
@@ -631,77 +639,91 @@
         }
         
         .upload-container h1 {
-            color: #333;
+            color: #024180;
             margin-bottom: 1rem;
             font-size: 2rem;
             font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
         }
-        
+
         .upload-container p {
-            color: #666;
+            color: #024180;
             margin-bottom: 2rem;
             font-size: 1.1rem;
             line-height: 1.5;
-        }
-        
-        .file-drop-area {
-            border: 3px dashed #007bff;
+            font-weight: 500;
+        }        .file-drop-area {
+            border: 3px dashed #024180;
             border-radius: 15px;
             padding: 2rem;
             margin: 1.5rem 0;
             cursor: pointer;
             transition: all 0.3s ease;
-            background: #f8f9ff;
+            background: linear-gradient(135deg, rgba(255, 226, 36, 0.1), rgba(102, 126, 234, 0.1));
+            position: relative;
+            overflow: hidden;
         }
-        
+
         .file-drop-area:hover {
-            border-color: #0056b3;
-            background: #e7f3ff;
+            border-color: #D91C12;
+            background: linear-gradient(135deg, rgba(255, 226, 36, 0.2), rgba(217, 28, 18, 0.1));
+            transform: scale(1.02);
+            box-shadow: 0 8px 25px rgba(2, 65, 128, 0.3);
         }
-        
+
         .file-drop-area.dragover {
-            border-color: #28a745;
-            background: #e8f5e8;
-        }
-        
-        .file-input {
+            border-color: #FFE224;
+            background: linear-gradient(135deg, rgba(255, 226, 36, 0.3), rgba(118, 75, 162, 0.2));
+            transform: scale(1.05);
+            box-shadow: 0 12px 35px rgba(255, 226, 36, 0.4);
+        }        .file-input {
             display: none;
         }
         
         .upload-icon {
             font-size: 3rem;
-            color: #007bff;
+            background: linear-gradient(135deg, #024180, #D91C12);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: #024180; /* Fallback for browsers that don't support background-clip */
             margin-bottom: 1rem;
+            filter: drop-shadow(0 2px 4px rgba(2, 65, 128, 0.3));
         }
-        
+
         .upload-text {
-            color: #333;
+            color: #024180;
             font-size: 1.1rem;
             margin-bottom: 0.5rem;
+            font-weight: 600;
         }
-        
+
         .upload-subtext {
-            color: #666;
+            color: #764ba2;
             font-size: 0.9rem;
+            font-weight: 500;
         }
-        
+
         .upload-btn {
-            background: #007bff;
+            background: linear-gradient(135deg, #024180 0%, #D91C12 50%, #FFE224 100%);
             color: white;
             border: none;
             border-radius: 10px;
             padding: 12px 30px;
             font-size: 1rem;
+            font-weight: 600;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: all 0.3s ease;
             margin-top: 1rem;
+            box-shadow: 0 4px 15px rgba(2, 65, 128, 0.3);
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
         }
-        
+
         .upload-btn:hover {
-            background: #0056b3;
-        }
-        
-        .upload-btn:disabled {
+            background: linear-gradient(135deg, #D91C12 0%, #024180 50%, #667eea 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(217, 28, 18, 0.4);
+        }        .upload-btn:disabled {
             background: #6c757d;
             cursor: not-allowed;
         }
@@ -724,29 +746,50 @@
         
         .progress-fill {
             height: 100%;
-            background: #28a745;
+            background: linear-gradient(90deg, #024180 0%, #667eea 25%, #FFE224 50%, #D91C12 75%, #764ba2 100%);
             width: 0%;
             transition: width 0.3s ease;
+            border-radius: 3px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
         }
         
         .error-message {
-            color: #dc3545;
-            background: #f8d7da;
-            border: 1px solid #f5c6cb;
+            color: #D91C12;
+            background: linear-gradient(135deg, rgba(217, 28, 18, 0.1), rgba(255, 226, 36, 0.05));
+            border: 2px solid #D91C12;
             border-radius: 8px;
             padding: 1rem;
             margin-top: 1rem;
             display: none;
+            font-weight: 500;
         }
-        
+
         .success-message {
-            color: #155724;
-            background: #d4edda;
-            border: 1px solid #c3e6cb;
+            color: #024180;
+            background: linear-gradient(135deg, rgba(2, 65, 128, 0.1), rgba(255, 226, 36, 0.1));
+            border: 2px solid #024180;
             border-radius: 8px;
             padding: 1rem;
             margin-top: 1rem;
             display: none;
+            font-weight: 500;
         }
     </style>
 </head>
