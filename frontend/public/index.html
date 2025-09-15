@@ -1767,7 +1767,12 @@
             
             async function uploadFile() {
                 const file = fileInput.files[0];
-                if (!file) return;
+                if (!file) {
+                    showError('No file selected');
+                    return;
+                }
+                
+                console.log('Starting upload for file:', file.name);
                 
                 const formData = new FormData();
                 formData.append('coursesFile', file);
@@ -1776,6 +1781,8 @@
                     uploadBtn.disabled = true;
                     showProgress();
                     hideMessages();
+                    
+                    console.log('Sending request to server...');
                     
                     // Simulate progress (since we can't track real upload progress easily)
                     let progress = 0;
@@ -1792,7 +1799,18 @@
                         body: formData
                     });
                     
+                    console.log('Server response status:', response.status);
+                    console.log('Server response ok:', response.ok);
+                    
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error('Server error response:', errorText);
+                        throw new Error(`Server error: ${response.status} - ${errorText}`);
+                    }
+                    
                     const result = await response.json();
+                    console.log('Server response data:', result);
+                    
                     clearInterval(progressInterval);
                     progressFill.style.width = '100%';
                     
@@ -1807,8 +1825,9 @@
                         throw new Error(result.message || 'Upload failed');
                     }
                 } catch (error) {
-                    console.error('Upload error:', error);
-                    showError(error.message || 'Upload failed. Please try again.');
+                    console.error('Upload error details:', error);
+                    clearInterval(progressInterval);
+                    showError(`Upload failed: ${error.message}. Check browser console for details.`);
                 } finally {
                     uploadBtn.disabled = false;
                     hideProgress();

@@ -32,34 +32,50 @@ router.get('/check-courses-file', (req, res) => {
 
 // Route to upload Courses.xls file
 router.post('/upload-courses', upload.single('coursesFile'), (req, res) => {
+    console.log('Upload request received');
+    console.log('File info:', req.file ? req.file.originalname : 'No file');
+    
     try {
         if (!req.file) {
-            return res.status(400).json({ message: 'No file uploaded' });
+            console.log('No file in request');
+            return res.status(400).json({ success: false, message: 'No file uploaded' });
         }
 
+        console.log('Processing file:', req.file.originalname);
+        console.log('File path:', req.file.path);
+        
         const dataDir = path.join(__dirname, '../../data');
         const targetPath = path.join(dataDir, 'Courses.xls');
         
+        console.log('Target directory:', dataDir);
+        console.log('Target path:', targetPath);
+        
         // Create data directory if it doesn't exist
         if (!fs.existsSync(dataDir)) {
+            console.log('Creating data directory');
             fs.mkdirSync(dataDir, { recursive: true });
         }
 
         // Move the uploaded file to the data directory
+        console.log('Copying file to target location');
         fs.copyFileSync(req.file.path, targetPath);
         
         // Clean up the temporary file
+        console.log('Cleaning up temporary file');
         fs.unlinkSync(req.file.path);
         
         // Test if the file can be read
         try {
+            console.log('Testing file parsing');
             const testLectures = excelService.getLectures();
+            console.log('File parsed successfully, found', testLectures.length, 'courses');
             res.json({ 
                 success: true, 
                 message: 'Courses.xls uploaded successfully',
                 lectureCount: testLectures.length
             });
         } catch (parseError) {
+            console.error('File parsing error:', parseError);
             // Remove the invalid file
             if (fs.existsSync(targetPath)) {
                 fs.unlinkSync(targetPath);
@@ -71,7 +87,7 @@ router.post('/upload-courses', upload.single('coursesFile'), (req, res) => {
             });
         }
     } catch (error) {
-        console.error('Error uploading file:', error);
+        console.error('Upload error:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Error uploading file', 
