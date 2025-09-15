@@ -644,12 +644,28 @@
                 
                 <!-- Timetable Controls -->
                 <div id="timetableControls" style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: none;">
+                    <!-- Bookmarked Combinations -->
+                    <div id="bookmarkedCombinations" style="margin-bottom: 15px; display: none;">
+                        <h4 style="margin: 0 0 10px 0; color: #007bff;">📌 Bookmarked Combinations</h4>
+                        <div id="bookmarkedList" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                            <!-- Bookmarked combinations will appear here -->
+                        </div>
+                    </div>
+                    
                     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                        <div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
                             <label style="font-weight: bold; margin-right: 10px;">Timetable Combination:</label>
                             <select id="combinationSelector" onchange="displayCombinationInTimetable()" style="padding: 8px; border: 2px solid #e0e0e0; border-radius: 5px; background: white;">
                                 <option value="">Select a combination...</option>
                             </select>
+                            
+                            <!-- Combination Action Buttons -->
+                            <button id="bookmarkBtn" onclick="toggleBookmarkCombination()" style="padding: 6px 12px; background: #ffc107; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; display: none;" title="Bookmark this combination">
+                                ⭐ Bookmark
+                            </button>
+                            <button id="deleteBtn" onclick="deleteCombination()" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; display: none;" title="Delete this combination">
+                                🗑️ Delete
+                            </button>
                         </div>
                         <div style="color: #666; font-size: 14px;">
                             <span id="combinationInfo"></span>
@@ -689,6 +705,10 @@
         let courseToAlternativeGroup = {}; // Object to map course codes to their alternative group ID
         let alternativeGroupCounter = 0; // Counter to generate unique group IDs
         
+        // Combination management
+        let deletedCombinations = new Set(); // Set to track deleted combination indices
+        let bookmarkedCombinations = new Set(); // Set to track bookmarked combination indices
+        
         // ============ SESSION STATE MANAGEMENT ============
         
         // Collect complete application state for export/cache
@@ -721,6 +741,10 @@
                     alternativeCourseGroups: alternativeCourseGroups,
                     courseToAlternativeGroup: courseToAlternativeGroup,
                     alternativeGroupCounter: alternativeGroupCounter,
+                    
+                    // Combination management (convert Set to Array for JSON)
+                    deletedCombinations: Array.from(deletedCombinations),
+                    bookmarkedCombinations: Array.from(bookmarkedCombinations),
                     
                     // Export selections (convert Set to Array for JSON)
                     selectedCombinationsForExport: Array.from(selectedCombinationsForExport)
@@ -755,6 +779,10 @@
                 alternativeCourseGroups = state.alternativeCourseGroups || {};
                 courseToAlternativeGroup = state.courseToAlternativeGroup || {};
                 alternativeGroupCounter = state.alternativeGroupCounter || 0;
+                
+                // Restore combination management (convert Array back to Set)
+                deletedCombinations = new Set(state.deletedCombinations || []);
+                bookmarkedCombinations = new Set(state.bookmarkedCombinations || []);
                 
                 // Restore export selections (convert Array back to Set)
                 selectedCombinationsForExport = new Set(state.selectedCombinationsForExport || []);
@@ -2126,31 +2154,42 @@
             timetableControls.style.display = 'block';
             populateCombinationSelector();
             
-            // Display valid combinations list
-            container.innerHTML = validCombinations.map((combination, index) => {
-                const conflictCount = countTimeConflicts(combination);
-                const emptyDaysCount = countEmptyDays(combination);
-                
-                const conflictBadge = conflictCount > 0 ? 
-                    `<span style="background: #ffc107; color: #856404; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 5px;">${conflictCount} conflict${conflictCount > 1 ? 's' : ''}</span>` : 
-                    '<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 5px;">No conflicts</span>';
-                
-                const emptyDaysBadge = emptyDaysCount > 0 ? 
-                    `<span style="background: #17a2b8; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 5px;">${emptyDaysCount} empty day${emptyDaysCount > 1 ? 's' : ''}</span>` : 
-                    '<span style="background: #6f42c1; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 5px;">All days occupied</span>';
-                
-                const borderColor = conflictCount > 0 ? '#ffc107' : '#28a745';
-                const backgroundColor = 'white';
-                
-                return `
-                <div style="margin-bottom: 20px; padding: 15px; border: 2px solid ${borderColor}; border-radius: 10px; background: ${backgroundColor};">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
-                        <h4 style="margin: 0; color: #007bff; display: flex; align-items: center;">Combination ${index + 1}${conflictBadge}</h4>
-                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #666;">
-                            <input type="checkbox" class="combination-export-checkbox" data-index="${index}" onchange="toggleCombinationSelection(${index})" style="cursor: pointer; transform: scale(1.2);">
-                            Export
-                        </label>
-                    </div>
+            // Display valid combinations list (excluding deleted ones)
+            container.innerHTML = validCombinations
+                .map((combination, index) => ({ combination, index }))
+                .filter(item => !deletedCombinations.has(item.index))
+                .map(item => {
+                    const { combination, index } = item;
+                    const conflictCount = countTimeConflicts(combination);
+                    const emptyDaysCount = countEmptyDays(combination);
+                    
+                    const conflictBadge = conflictCount > 0 ? 
+                        `<span style="background: #ffc107; color: #856404; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 5px;">${conflictCount} conflict${conflictCount > 1 ? 's' : ''}</span>` : 
+                        '<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 5px;">No conflicts</span>';
+                    
+                    const emptyDaysBadge = emptyDaysCount > 0 ? 
+                        `<span style="background: #17a2b8; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 5px;">${emptyDaysCount} empty day${emptyDaysCount > 1 ? 's' : ''}</span>` : 
+                        '<span style="background: #6f42c1; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 5px;">All days occupied</span>';
+                    
+                    const borderColor = conflictCount > 0 ? '#ffc107' : '#28a745';
+                    const backgroundColor = 'white';
+                    const isBookmarked = bookmarkedCombinations.has(index);
+                    const bookmarkIcon = isBookmarked ? '⭐' : '';
+                    
+                    return `
+                    <div style="margin-bottom: 20px; padding: 15px; border: 2px solid ${borderColor}; border-radius: 10px; background: ${backgroundColor};">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+                            <h4 style="margin: 0; color: #007bff; display: flex; align-items: center;">${bookmarkIcon} Combination ${index + 1}${conflictBadge}</h4>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <button onclick="selectCombinationFromList(${index})" style="padding: 4px 8px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">View</button>
+                                <button onclick="toggleBookmarkFromList(${index})" style="padding: 4px 8px; background: ${isBookmarked ? '#6c757d' : '#ffc107'}; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">${isBookmarked ? 'Unbookmark' : 'Bookmark'}</button>
+                                <button onclick="deleteCombinationFromList(${index})" style="padding: 4px 8px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Delete</button>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #666;">
+                                    <input type="checkbox" class="combination-export-checkbox" data-index="${index}" onchange="toggleCombinationSelection(${index})" style="cursor: pointer; transform: scale(1.2);">
+                                    Export
+                                </label>
+                            </div>
+                        </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px;">
                         ${combination.map(lectureGroup => {
                             const firstLecture = lectureGroup[0];
@@ -2193,18 +2232,62 @@
             const selector = document.getElementById('combinationSelector');
             const info = document.getElementById('combinationInfo');
             
-            const totalCount = validCombinations.length;
+            // Filter out deleted combinations
+            const activeCombinations = validCombinations
+                .map((combination, index) => ({ combination, originalIndex: index }))
+                .filter(item => !deletedCombinations.has(item.originalIndex));
             
-            selector.innerHTML = '<option value="">Select a combination...</option>' +
-                validCombinations.map((combination, index) => {
-                    const conflictCount = countTimeConflicts(combination);
-                    const emptyDaysCount = countEmptyDays(combination);
-                    const conflictText = conflictCount > 0 ? ` (${conflictCount} conflicts)` : '';
-                    const emptyDaysText = emptyDaysCount > 0 ? ` (${emptyDaysCount} empty days)` : '';
-                    return `<option value="${index}">Combination ${index + 1}${conflictText}${emptyDaysText}</option>`;
-                }).join('');
+            const totalCount = activeCombinations.length;
+            const deletedCount = deletedCombinations.size;
+            const bookmarkedCount = bookmarkedCombinations.size;
             
-            info.textContent = `${totalCount} valid combination(s) found`;
+            // Separate bookmarked and non-bookmarked combinations
+            const bookmarkedItems = activeCombinations.filter(item => bookmarkedCombinations.has(item.originalIndex));
+            const regularItems = activeCombinations.filter(item => !bookmarkedCombinations.has(item.originalIndex));
+            
+            // Build options with bookmarked combinations first
+            let options = '<option value="">Select a combination...</option>';
+            
+            // Add bookmarked combinations first (with star indicator)
+            bookmarkedItems.forEach(item => {
+                const conflictCount = countTimeConflicts(item.combination);
+                const emptyDaysCount = countEmptyDays(item.combination);
+                const conflictText = conflictCount > 0 ? ` (${conflictCount} conflicts)` : '';
+                const emptyDaysText = emptyDaysCount > 0 ? ` (${emptyDaysCount} empty days)` : '';
+                options += `<option value="${item.originalIndex}">⭐ Combination ${item.originalIndex + 1}${conflictText}${emptyDaysText}</option>`;
+            });
+            
+            // Add separator if we have bookmarked combinations
+            if (bookmarkedItems.length > 0 && regularItems.length > 0) {
+                options += '<option disabled>─────────────────────</option>';
+            }
+            
+            // Add regular combinations
+            regularItems.forEach(item => {
+                const conflictCount = countTimeConflicts(item.combination);
+                const emptyDaysCount = countEmptyDays(item.combination);
+                const conflictText = conflictCount > 0 ? ` (${conflictCount} conflicts)` : '';
+                const emptyDaysText = emptyDaysCount > 0 ? ` (${emptyDaysCount} empty days)` : '';
+                options += `<option value="${item.originalIndex}">Combination ${item.originalIndex + 1}${conflictText}${emptyDaysText}</option>`;
+            });
+            
+            selector.innerHTML = options;
+            
+            // Update info text
+            let infoText = `${totalCount} valid combination(s) found`;
+            if (deletedCount > 0) {
+                infoText += `, ${deletedCount} deleted`;
+            }
+            if (bookmarkedCount > 0) {
+                infoText += `, ${bookmarkedCount} bookmarked`;
+            }
+            info.textContent = infoText;
+            
+            // Update bookmarked combinations display
+            updateBookmarkedCombinationsDisplay();
+            
+            // Update combination action buttons visibility
+            updateCombinationActionButtons();
         }
         
         // Select combination from dropdown
@@ -2215,13 +2298,220 @@
             displayCombinationInTimetable();
         }
         
+        // Update combination action buttons visibility
+        function updateCombinationActionButtons() {
+            const selector = document.getElementById('combinationSelector');
+            const bookmarkBtn = document.getElementById('bookmarkBtn');
+            const deleteBtn = document.getElementById('deleteBtn');
+            
+            const selectedIndex = parseInt(selector.value);
+            const hasValidSelection = !isNaN(selectedIndex) && selectedIndex >= 0;
+            
+            if (hasValidSelection && !deletedCombinations.has(selectedIndex)) {
+                bookmarkBtn.style.display = 'inline-block';
+                deleteBtn.style.display = 'inline-block';
+                
+                // Update bookmark button text based on current state
+                if (bookmarkedCombinations.has(selectedIndex)) {
+                    bookmarkBtn.innerHTML = '⭐ Unbookmark';
+                    bookmarkBtn.style.background = '#6c757d';
+                    bookmarkBtn.title = 'Remove bookmark from this combination';
+                } else {
+                    bookmarkBtn.innerHTML = '⭐ Bookmark';
+                    bookmarkBtn.style.background = '#ffc107';
+                    bookmarkBtn.title = 'Bookmark this combination';
+                }
+            } else {
+                bookmarkBtn.style.display = 'none';
+                deleteBtn.style.display = 'none';
+            }
+        }
+        
+        // Toggle bookmark status of current combination
+        function toggleBookmarkCombination() {
+            const selector = document.getElementById('combinationSelector');
+            const selectedIndex = parseInt(selector.value);
+            
+            if (isNaN(selectedIndex) || selectedIndex < 0 || deletedCombinations.has(selectedIndex)) {
+                return;
+            }
+            
+            if (bookmarkedCombinations.has(selectedIndex)) {
+                bookmarkedCombinations.delete(selectedIndex);
+                console.log(`Removed bookmark from combination ${selectedIndex + 1}`);
+            } else {
+                bookmarkedCombinations.add(selectedIndex);
+                console.log(`Bookmarked combination ${selectedIndex + 1}`);
+            }
+            
+            // Refresh the combination selector to show updated order
+            populateCombinationSelector();
+            
+            // Restore the current selection
+            selector.value = selectedIndex;
+            updateCombinationActionButtons();
+            
+            // Auto-save session
+            autoSaveSession();
+        }
+        
+        // Delete current combination
+        function deleteCombination() {
+            const selector = document.getElementById('combinationSelector');
+            const selectedIndex = parseInt(selector.value);
+            
+            if (isNaN(selectedIndex) || selectedIndex < 0 || deletedCombinations.has(selectedIndex)) {
+                return;
+            }
+            
+            const confirmDelete = confirm(`Are you sure you want to delete Combination ${selectedIndex + 1}? This action cannot be undone.`);
+            
+            if (!confirmDelete) {
+                return;
+            }
+            
+            // Add to deleted combinations
+            deletedCombinations.add(selectedIndex);
+            
+            // Remove from bookmarked if it was bookmarked
+            bookmarkedCombinations.delete(selectedIndex);
+            
+            // Remove from export selections if it was selected for export
+            selectedCombinationsForExport.delete(selectedIndex);
+            
+            console.log(`Deleted combination ${selectedIndex + 1}`);
+            
+            // Clear current timetable if it was showing the deleted combination
+            if (currentCombinationIndex === selectedIndex) {
+                currentCombinationIndex = 0;
+                clearTimetable();
+            }
+            
+            // Refresh the combination selector
+            populateCombinationSelector();
+            
+            // Clear selection
+            selector.value = '';
+            updateCombinationActionButtons();
+            
+            // Update export controls since selections may have changed
+            updateExportControls();
+            
+            // Auto-save session
+            autoSaveSession();
+        }
+        
+        // Update bookmarked combinations display
+        function updateBookmarkedCombinationsDisplay() {
+            const bookmarkedContainer = document.getElementById('bookmarkedCombinations');
+            const bookmarkedList = document.getElementById('bookmarkedList');
+            
+            // Filter out deleted combinations from bookmarked ones
+            const activeBookmarked = Array.from(bookmarkedCombinations).filter(index => !deletedCombinations.has(index));
+            
+            if (activeBookmarked.length === 0) {
+                bookmarkedContainer.style.display = 'none';
+                return;
+            }
+            
+            bookmarkedContainer.style.display = 'block';
+            
+            // Create quick access buttons for bookmarked combinations
+            bookmarkedList.innerHTML = activeBookmarked
+                .sort((a, b) => a - b) // Sort by combination number
+                .map(index => {
+                    const combination = validCombinations[index];
+                    const conflictCount = countTimeConflicts(combination);
+                    const emptyDaysCount = countEmptyDays(combination);
+                    const conflictText = conflictCount > 0 ? ` (${conflictCount} conflicts)` : '';
+                    const emptyDaysText = emptyDaysCount > 0 ? ` (${emptyDaysCount} empty days)` : '';
+                    
+                    return `
+                        <button onclick="selectBookmarkedCombination(${index})" 
+                                style="padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin: 2px;"
+                                title="Click to view this combination">
+                            ⭐ ${index + 1}${conflictText}${emptyDaysText}
+                        </button>
+                    `;
+                }).join('');
+        }
+        
+        // Select and display a bookmarked combination
+        function selectBookmarkedCombination(index) {
+            const selector = document.getElementById('combinationSelector');
+            selector.value = index;
+            currentCombinationIndex = index;
+            displayCombinationInTimetable();
+            updateCombinationActionButtons();
+        }
+        
+        // Select combination from the combinations list
+        function selectCombinationFromList(index) {
+            const selector = document.getElementById('combinationSelector');
+            selector.value = index;
+            currentCombinationIndex = index;
+            displayCombinationInTimetable();
+            updateCombinationActionButtons();
+        }
+        
+        // Toggle bookmark from the combinations list
+        function toggleBookmarkFromList(index) {
+            if (bookmarkedCombinations.has(index)) {
+                bookmarkedCombinations.delete(index);
+            } else {
+                bookmarkedCombinations.add(index);
+            }
+            
+            // Refresh displays
+            populateCombinationSelector();
+            generateTimetableCombinations();
+            
+            // Auto-save session
+            autoSaveSession();
+        }
+        
+        // Delete combination from the combinations list
+        function deleteCombinationFromList(index) {
+            const confirmDelete = confirm(`Are you sure you want to delete Combination ${index + 1}? This action cannot be undone.`);
+            
+            if (!confirmDelete) {
+                return;
+            }
+            
+            // Add to deleted combinations
+            deletedCombinations.add(index);
+            
+            // Remove from bookmarked if it was bookmarked
+            bookmarkedCombinations.delete(index);
+            
+            // Remove from export selections if it was selected for export
+            selectedCombinationsForExport.delete(index);
+            
+            // Clear current timetable if it was showing the deleted combination
+            if (currentCombinationIndex === index) {
+                currentCombinationIndex = 0;
+                clearTimetable();
+                const selector = document.getElementById('combinationSelector');
+                selector.value = '';
+            }
+            
+            // Refresh displays
+            populateCombinationSelector();
+            generateTimetableCombinations();
+            updateExportControls();
+            
+            // Auto-save session
+            autoSaveSession();
+        }
+        
         // Display selected combination in timetable
         function displayCombinationInTimetable() {
             const selector = document.getElementById('combinationSelector');
             const selectedIndex = parseInt(selector.value);
             
-            if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= validCombinations.length) {
+            if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= validCombinations.length || deletedCombinations.has(selectedIndex)) {
                 clearTimetable();
+                updateCombinationActionButtons();
                 return;
             }
             
@@ -2237,6 +2527,9 @@
                     placeLectureInTimetable(lecture);
                 });
             });
+            
+            // Update combination action buttons
+            updateCombinationActionButtons();
         }
         
         // Toggle time slot lock
@@ -2915,6 +3208,11 @@
         
         // Toggle combination selection for export
         function toggleCombinationSelection(combinationIndex) {
+            // Don't allow selection of deleted combinations
+            if (deletedCombinations.has(combinationIndex)) {
+                return;
+            }
+            
             if (selectedCombinationsForExport.has(combinationIndex)) {
                 selectedCombinationsForExport.delete(combinationIndex);
             } else {
@@ -2928,7 +3226,10 @@
         function selectAllCombinationsForExport() {
             selectedCombinationsForExport.clear();
             for (let i = 0; i < validCombinations.length; i++) {
-                selectedCombinationsForExport.add(i);
+                // Only select non-deleted combinations
+                if (!deletedCombinations.has(i)) {
+                    selectedCombinationsForExport.add(i);
+                }
             }
             
             updateExportControls();
@@ -2964,12 +3265,22 @@
             const checkboxes = document.querySelectorAll('.combination-export-checkbox');
             checkboxes.forEach(checkbox => {
                 const index = parseInt(checkbox.dataset.index);
-                checkbox.checked = selectedCombinationsForExport.has(index);
+                // Only update checkboxes for non-deleted combinations
+                if (!deletedCombinations.has(index)) {
+                    checkbox.checked = selectedCombinationsForExport.has(index);
+                }
             });
         }
         
         // Export selected combinations as PNG
         async function exportSelectedCombinations() {
+            // Filter out any deleted combinations from the selection
+            selectedCombinationsForExport.forEach(index => {
+                if (deletedCombinations.has(index)) {
+                    selectedCombinationsForExport.delete(index);
+                }
+            });
+            
             if (selectedCombinationsForExport.size === 0) {
                 alert('Please select at least one combination to export.');
                 return;
@@ -2984,41 +3295,65 @@
             try {
                 for (let i = 0; i < selectedIndices.length; i++) {
                     const combinationIndex = selectedIndices[i];
-                    exportStatus.textContent = `Exporting combination ${i + 1} of ${selectedIndices.length}...`;
+                    exportStatus.textContent = `📱 Displaying and exporting combination ${i + 1} of ${selectedIndices.length}...`;
+                    exportStatus.style.fontWeight = 'bold';
                     
                     // Switch to this combination temporarily
                     const originalIndex = currentCombinationIndex;
                     currentCombinationIndex = combinationIndex;
+                    
+                    // Update the dropdown selector to match the current combination
+                    const selector = document.getElementById('combinationSelector');
+                    if (selector) {
+                        selector.value = combinationIndex;
+                    }
+                    
                     displayCombinationInTimetable();
                     
-                    // Wait a moment for the DOM to update
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    // Wait a moment for the DOM to update and let user see the combination
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                    
+                    // Update status to show we're now capturing
+                    exportStatus.textContent = `📸 Capturing combination ${i + 1} of ${selectedIndices.length} as PNG...`;
                     
                     // Capture the timetable
                     await exportTimetableAsPNG(combinationIndex + 1);
                     
+                    // Brief pause before moving to next combination
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
                     // Restore original combination if it was different
                     if (originalIndex !== combinationIndex) {
                         currentCombinationIndex = originalIndex;
+                        
+                        // Restore the original dropdown value
+                        if (selector) {
+                            selector.value = originalIndex;
+                        }
+                        
                         displayCombinationInTimetable();
                     }
                 }
                 
-                exportStatus.textContent = `Successfully exported ${selectedIndices.length} combination${selectedIndices.length !== 1 ? 's' : ''}!`;
+                exportStatus.textContent = `✅ Successfully exported ${selectedIndices.length} combination${selectedIndices.length !== 1 ? 's' : ''}!`;
                 exportStatus.style.color = '#28a745';
+                exportStatus.style.fontWeight = 'bold';
                 
                 // Clear status after 3 seconds
                 setTimeout(() => {
                     exportStatus.textContent = '';
+                    exportStatus.style.fontWeight = 'normal';
                 }, 3000);
                 
             } catch (error) {
                 console.error('Export error:', error);
-                exportStatus.textContent = 'Export failed. Please try again.';
+                exportStatus.textContent = '❌ Export failed. Please try again.';
                 exportStatus.style.color = '#dc3545';
+                exportStatus.style.fontWeight = 'bold';
                 
                 setTimeout(() => {
                     exportStatus.textContent = '';
+                    exportStatus.style.fontWeight = 'normal';
                 }, 3000);
             }
         }
