@@ -143,6 +143,12 @@ $RECYCLE.BIN/
 ~$*.xls
 ~$*.xlsx
 
+# Data files containing sensitive information
+backend/data/Courses.xls
+backend/data/Courses.xlsx
+backend/data/*.xls
+backend/data/*.xlsx
+
 # Backup files
 *.bak
 *.backup
